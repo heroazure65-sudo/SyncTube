@@ -1,39 +1,890 @@
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import { getDatabase, ref, get, set, update, onValue, onDisconnect, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
-import { firebaseConfig } from './firebase-config.js';
+import { firebaseConfig } from "./firebase-config.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
+import {
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword,
+  createUserWithEmailAndPassword, updateProfile, signOut
+} from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
+import {
+  getDatabase, ref, get, set, update, push, onValue, query,
+  limitToLast, onDisconnect, remove, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/13.4.0/firebase-database.js";
 
-const $ = id => document.getElementById(id);
-let auth, db, user, roomId = null, roomData = null, isHost = false, player = null, playerReady = false, playerApiReady = false, lastAppliedUpdate = 0, soundOn = true, audioCtx;
-let serverOffset = 0, roomUnsubscribe = null, pendingState = null, enabledPlayback = false, syncTimer = null;
-const firebaseReady = firebaseConfig.apiKey !== 'YOUR_FIREBASE_API_KEY' && firebaseConfig.projectId !== 'YOUR_PROJECT_ID' && firebaseConfig.databaseURL.startsWith('https://') && !firebaseConfig.databaseURL.includes('YOUR_PROJECT_ID');
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => [...document.querySelectorAll(selector)];
+const requiredFirebaseValues = [firebaseConfig.apiKey, firebaseConfig.authDomain, firebaseConfig.databaseURL, firebaseConfig.projectId, firebaseConfig.appId];
+const configReady = requiredFirebaseValues.every((value) => typeof value === "string" && value && !value.includes("YOUR_"));
+let app = null, auth = null, db = null, currentUser = null, memberProfile = null;
+let isOwner = false, activeRoomCode = null, roomMeta = null, sharedPlayback = null;
+let pendingIncomingShare = null, currentVideoId = "", currentVideoMeta = null, currentPlaylistId = "", currentQueueIds = [], currentPlaylistIndex = 0, ytPlayer = null, playerReady = false;
+let roomUnsubs = [], ownerMembersUnsub = null, serverTimeOffset = 0, lastPublishAt = 0;
+let toastTimer = null, authMode = "signin";
 
-window.onYouTubeIframeAPIReady = () => { playerApiReady = true; createPlayer(); };
-function createPlayer(){ if(!playerApiReady || player) return; player = new YT.Player('player',{height:'100%',width:'100%',videoId:'',playerVars:{autoplay:0,controls:1,rel:0,modestbranding:1,playsinline:1,enablejsapi:1},events:{onReady:()=>{playerReady=true; $('playerPlaceholder').classList.remove('hidden'); if(pendingState) applyRoomState(pendingState);},onStateChange:e=>{if(e.data===YT.PlayerState.PLAYING){$('controlStatus').textContent='Playing';$('playbackLabel').textContent='Playing';}else if(e.data===YT.PlayerState.PAUSED){$('controlStatus').textContent='Paused';$('playbackLabel').textContent='Paused';}else if(e.data===YT.PlayerState.ENDED){$('controlStatus').textContent='Ended';$('playbackLabel').textContent='Ended';}}}}); }
-
-function toast(message){ const old=$('toast'); if(old) old.remove(); const el=document.createElement('div');el.id='toast';el.textContent=message;el.style.cssText='position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:20;background:#191d3d;border:1px solid #8b5cf6;padding:11px 16px;border-radius:12px;font-size:12px;box-shadow:0 8px 30px #0008';document.body.append(el);setTimeout(()=>el.remove(),3000); }
-function sfx(freq=560){ if(!soundOn) return; try{audioCtx ||= new (window.AudioContext||window.webkitAudioContext)(); const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.value=freq;g.gain.setValueAtTime(.045,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.09);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+.1);}catch{} }
-function openModal(join=true){$('modalTitle').textContent=join?'Join a room':'Create a room';$('modalDescription').textContent=join?'Enter the room code shared by your host.':'Choose a short room code your friends can enter.';$('roomInput').value=join?'':makeCode();$('modal').classList.remove('hidden');$('roomInput').focus();}
-function makeCode(){return 'SYNC-'+Math.random().toString(36).slice(2,6).toUpperCase()+'-'+Math.random().toString(36).slice(2,5).toUpperCase();}
-function cleanCode(v){return v.toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,24);}
-function getVideoId(raw){try{const u=new URL(raw);if(u.hostname==='youtu.be')return u.pathname.slice(1).split('/')[0];if(u.hostname.endsWith('youtube.com')||u.hostname.endsWith('youtube-nocookie.com')){if(u.pathname==='/watch')return u.searchParams.get('v');const m=u.pathname.match(/^\/(embed|shorts|live)\/([^/?]+)/);return m?.[2]||null;}}catch{}return null;}
-function currentPosition(){return playerReady&&player?.getCurrentTime?player.getCurrentTime():Number(roomData?.position||0);}
-function setStatus(text,good=false){$('connection').classList.toggle('online',good);$('connection').innerHTML=`<i></i> ${text}`;}
-async function init(){
-  if(!firebaseReady){setStatus('Setup required');toast('Add your Firebase config to firebase-config.js to enable rooms.');$('connection').title='Open README.md for the free Firebase setup';return;}
-  try{const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getDatabase(app);onValue(ref(db,'.info/serverTimeOffset'),s=>serverOffset=s.val()||0);await signInAnonymously(auth);onAuthStateChanged(auth,u=>{if(u){user=u;setStatus('Connected',true);const fromHash=new URLSearchParams(location.hash.slice(1)).get('room');if(fromHash)connectRoom(cleanCode(fromHash));}});}catch(e){console.error(e);setStatus('Connection error');toast('Firebase connection failed. Check your config and Auth settings.');}
+function toast(message) {
+  const node = $("#toast");
+  node.textContent = message;
+  node.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => node.classList.remove("show"), 2600);
 }
-async function connectRoom(code,create=false){if(!db||!user)return toast('Finish Firebase setup first.');if(!code)return;code=cleanCode(code);const roomRef=ref(db,`rooms/${code}`);try{const snap=await get(roomRef);if(create){if(snap.exists())return toast('That room code is already in use.');await set(roomRef,{hostUid:user.uid,videoId:'',title:'No video selected',state:'paused',position:0,scheduledAt:0,updatedAt:Date.now()+serverOffset,updatedBy:user.uid,createdAt:serverTimestamp()});}else if(!snap.exists())return toast('Room not found. Check the code.');if(roomUnsubscribe)roomUnsubscribe();roomId=code;location.hash=`room=${encodeURIComponent(code)}`;roomUnsubscribe=onValue(roomRef,s=>{if(!s.exists()){toast('This room no longer exists.');return;}roomData=s.val();isHost=roomData.hostUid===user.uid;renderRoom();pendingState=roomData;if(playerReady)applyRoomState(roomData);});$('leaveRoom').disabled=false;toast(create?'Room created. Share the invite link!':'Joined room.');sfx(720);}catch(e){console.error(e);toast('Could not access this room. Check Firebase database rules.');}}
-function renderRoom(){if(!roomData)return;$('roomName').textContent=roomId;$('roomCode').textContent=roomId;$('detailRoom').textContent=roomId;$('roleLabel').textContent=isHost?'Host':'Viewer';$('hostTag').textContent=isHost?'You are the host':'Host controls video';$('hostTag').style.color=isHost?'#4ade80':'';$('videoUrl').disabled=!isHost;$('videoForm').querySelector('button').disabled=!isHost;$('playPause').disabled=!roomData.videoId;$('videoTitle').textContent=roomData.title||'No video selected';$('controlTitle').textContent=roomData.title||'Nothing playing';$('videoSubtitle').textContent=roomData.videoId?'Shared YouTube video':'Waiting for the host to choose a video.';$('syncPill').textContent=roomData.state==='playing'?'● Live sync':'● '+(roomData.state||'Ready');$('syncPill').style.color=roomData.state==='playing'?'#4ade80':'#b9b4d9';$('onlineCount').textContent='—';$('watchingCount').textContent='—';$('syncStatus').textContent='Live';$('playbackLabel').textContent=roomData.state||'Idle';$('playerPlaceholder').classList.toggle('hidden',!!roomData.videoId);}
-function applyRoomState(data){if(!playerReady||!data)return;pendingState=data;if(syncTimer){clearTimeout(syncTimer);syncTimer=null;}if(!data.videoId)return;const now=Date.now()+serverOffset;const target=Math.max(0,Number(data.position||0));if(player.getVideoData()?.video_id!==data.videoId){player.loadVideoById({videoId:data.videoId,startSeconds:target});$('playerPlaceholder').classList.add('hidden');}else if(data.updatedAt!==lastAppliedUpdate){const drift=Math.abs((player.getCurrentTime?.()||0)-target);if(drift>1.4&&data.state!=='playing')player.seekTo(target,true);}
- lastAppliedUpdate=data.updatedAt||0;if(data.state==='playing'){const delay=Math.max(0,Number(data.scheduledAt||now)-now);$('syncOverlay').classList.remove('hidden');syncTimer=setTimeout(()=>{$('syncOverlay').classList.add('hidden');syncTimer=null;if(enabledPlayback){const elapsed=Math.max(0,(Date.now()+serverOffset-(data.scheduledAt||now))/1000);try{player.seekTo(target+elapsed,true);player.playVideo();}catch{}}else toast('Tap Enable Playback to join the synchronized video.');},Math.min(delay,10000));}else{try{player.pauseVideo();player.seekTo(target,true);}catch{}}
+function setMessage(selector, message, type = "") {
+  const node = $(selector);
+  if (!node) return;
+  node.textContent = message;
+  node.className = `form-message${type ? ` ${type}` : ""}`;
 }
-async function hostUpdate(patch){if(!roomId||!isHost)return toast('Only the room host can control shared playback.');try{await update(ref(db,`rooms/${roomId}`),{...patch,updatedAt:Date.now()+serverOffset,updatedBy:user.uid});}catch(e){console.error(e);toast('Could not update room.');}}
-async function loadVideo(url){if(!isHost)return;const id=getVideoId(url);if(!id)return toast('That does not look like a supported YouTube link.');const title='YouTube video · '+id;await hostUpdate({videoId:id,title,state:'paused',position:0,scheduledAt:0});$('videoUrl').value='';toast('Video loaded for the room.');sfx(640);}
-async function playTogether(){if(!roomData?.videoId)return toast('The host needs to load a video first.');if(!isHost)return toast('Ask the host to start playback.');const pos=currentPosition();await hostUpdate({state:'playing',position:pos,scheduledAt:Date.now()+serverOffset+2500});sfx(780);}
-async function pauseTogether(){if(!roomData?.videoId)return;if(!isHost)return toast('Ask the host to pause playback.');await hostUpdate({state:'paused',position:currentPosition(),scheduledAt:0});sfx(420);}
-async function seek(delta){if(!roomData?.videoId)return;if(!isHost)return toast('Only the host can seek.');const pos=Math.max(0,currentPosition()+delta);await hostUpdate({position:pos,state:roomData.state,scheduledAt:roomData.state==='playing'?Date.now()+serverOffset+1200:0});}
-async function leave(){if(roomUnsubscribe)roomUnsubscribe();roomUnsubscribe=null;roomId=null;roomData=null;isHost=false;location.hash='';$('roomName').textContent='Not connected';$('roomCode').textContent='Create or join a room';$('detailRoom').textContent='—';$('roleLabel').textContent='Not connected';$('leaveRoom').disabled=true;$('hostTag').textContent='Room host only';$('playerPlaceholder').classList.remove('hidden');$('videoTitle').textContent='No video selected';$('controlTitle').textContent='Nothing playing';$('syncStatus').textContent='Ready';toast('You left the room.');}
-$('createRoom').onclick=()=>openModal(false);$('joinRoom').onclick=()=>openModal(true);$('closeModal').onclick=()=>$('modal').classList.add('hidden');$('modal').onclick=e=>{if(e.target===$('modal'))$('modal').classList.add('hidden')};$('roomForm').onsubmit=async e=>{e.preventDefault();const code=cleanCode($('roomInput').value);$('modal').classList.add('hidden');await connectRoom(code,$('modalTitle').textContent==='Create a room');};$('videoForm').onsubmit=e=>{e.preventDefault();loadVideo($('videoUrl').value.trim())};$('playPause').onclick=()=>roomData?.state==='playing'?pauseTogether():playTogether();$('seekBack').onclick=()=>seek(-10);$('seekForward').onclick=()=>seek(10);$('leaveRoom').onclick=leave;$('copyInvite').onclick=async()=>{if(!roomId)return toast('Create or join a room first.');await navigator.clipboard.writeText(location.href);toast('Invite link copied.');sfx(700)};$('copyVideo').onclick=async()=>{if(!roomData?.videoId)return toast('No video loaded.');await navigator.clipboard.writeText(`https://youtu.be/${roomData.videoId}`);toast('YouTube link copied.');};$('fullscreen').onclick=()=>{const el=$('player').parentElement;if(el.requestFullscreen)el.requestFullscreen();};$('volume').oninput=e=>{if(playerReady)player.setVolume(Number(e.target.value));};$('enablePlayback').onclick=()=>{enabledPlayback=true;$('enableNotice').classList.add('hidden');if(roomData?.state==='playing')applyRoomState(roomData);sfx(820)};$('soundToggle').onclick=()=>{soundOn=!soundOn;$('soundToggle').style.color=soundOn?'#22d3ee':'#777';toast(`Sound effects ${soundOn?'on':'off'}`)};
-if(window.YT?.Player){playerApiReady=true;createPlayer();}
-init();
+function initials(value) {
+  const name = (value || "S").trim();
+  return name.split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "S";
+}
+function escapeText(value) { return String(value ?? ""); }
+function showGate(which) {
+  $("#authGate").classList.toggle("hidden", which !== "auth");
+  $("#pendingGate").classList.toggle("hidden", which !== "pending");
+  $("#appShell").classList.toggle("hidden", which !== "app");
+}
+function setBusy(button, busy, label = "Working…") {
+  if (!button) return;
+  if (busy) { button.dataset.originalHtml = button.innerHTML; button.textContent = label; button.disabled = true; }
+  else { if (button.dataset.originalHtml) button.innerHTML = button.dataset.originalHtml; button.disabled = false; }
+}
+function formatTime(timestamp) {
+  if (!timestamp) return "now";
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "now";
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+function userName() { return memberProfile?.displayName || currentUser?.displayName || currentUser?.email?.split("@")[0] || "Member"; }
+function activeMember() { return Boolean(currentUser && memberProfile?.active === true); }
+function roomIsHost() { return Boolean(activeRoomCode && roomMeta?.ownerUid === currentUser?.uid); }
+function safeVideoId(value) { return /^[A-Za-z0-9_-]{11}$/.test(value || "") ? value : ""; }
+function safePlaylistId(value) { return /^[A-Za-z0-9_-]{10,80}$/.test(value || "") ? value : ""; }
+function parseYouTubeLink(input) {
+  const raw = String(input || "").trim();
+  if (safeVideoId(raw)) return { kind: "video", videoId: raw };
+  try {
+    const url = new URL(raw.includes("://") ? raw : `https://${raw}`);
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
+    if (!(host === "youtu.be" || host === "youtube.com" || host.endsWith(".youtube.com") || host === "youtube-nocookie.com" || host.endsWith(".youtube-nocookie.com"))) return null;
+    const playlistId = safePlaylistId(url.searchParams.get("list") || "");
+    if (playlistId) return { kind: "playlist", playlistId };
+    let videoId = "";
+    if (host === "youtu.be") videoId = url.pathname.split("/").filter(Boolean)[0] || "";
+    else if (url.pathname === "/watch") videoId = url.searchParams.get("v") || "";
+    else if (/^\/(embed|shorts|live)\//.test(url.pathname)) videoId = url.pathname.split("/")[2] || "";
+    return safeVideoId(videoId) ? { kind: "video", videoId: safeVideoId(videoId) } : null;
+  } catch { return null; }
+}
+
+function extractYouTubeUrl(value) {
+  const text = String(value || "");
+  const match = text.match(/https?:\/\/(?:www\.|m\.|music\.)?(?:youtube\.com|youtu\.be)\/[^\s<>"']+/i);
+  return match ? match[0].replace(/[),.;!?]+$/, "") : "";
+}
+function processIncomingShare() {
+  const params = new URLSearchParams(window.location.search);
+  const sharedLink = extractYouTubeUrl(params.get("url")) || extractYouTubeUrl(params.get("text")) || extractYouTubeUrl(params.get("title")) || (parseYouTubeLink(params.get("url")) ? params.get("url") : "");
+  if (!sharedLink) return;
+  // Remove the share payload from the address bar immediately to prevent re-import on refresh.
+  window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`);
+  const resource = parseYouTubeLink(sharedLink);
+  if (!resource) return toast("The shared link was not a recognised YouTube video or playlist");
+  pendingIncomingShare = resource;
+  if (activeRoomCode && roomIsHost()) importIncomingShare();
+  else if (!activeRoomCode) toast("YouTube link received. Create or join a room; the host can add it to the shared playlist.");
+  else toast("Only the room host can add videos to the shared playlist.");
+}
+
+function importIncomingShare() {
+  if (!pendingIncomingShare) return;
+  if (!activeRoomCode) return toast("Create or join a room before loading shared content.");
+  if (!roomIsHost()) return toast("Only the room host can add videos to the shared playlist.");
+  const resource = pendingIncomingShare;
+  pendingIncomingShare = null;
+  if (resource.kind === "playlist") {
+    setSharedPlaylist(resource);
+    toast("YouTube playlist received and shared with the room");
+    return;
+  }
+  appendVideoToSharedQueue(resource.videoId);
+}
+
+
+// Firebase is initialized only after the user adds their own public web-app configuration.
+if (configReady) {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getDatabase(app);
+  onValue(ref(db, ".info/serverTimeOffset"), (snapshot) => { serverTimeOffset = snapshot.val() || 0; });
+} else {
+  setMessage("#authMessage", "Setup required: add your Firebase web-app values in firebase-config.js, then reload.", "error");
+  $("#authSubmit").disabled = true;
+  $("#signUpTab").disabled = true;
+}
+
+// Authentication / invite-only membership gate.
+function updateAuthMode(mode) {
+  authMode = mode;
+  const signIn = mode === "signin";
+  $("#signInTab").classList.toggle("active", signIn);
+  $("#signUpTab").classList.toggle("active", !signIn);
+  $("#signInTab").setAttribute("aria-selected", String(signIn));
+  $("#signUpTab").setAttribute("aria-selected", String(!signIn));
+  $("#displayNameField").classList.toggle("hidden", signIn);
+  $("#passwordInput").autocomplete = signIn ? "current-password" : "new-password";
+  $("#authSubmit").innerHTML = signIn ? 'Sign in <span aria-hidden="true">↗</span>' : 'Create account <span aria-hidden="true">↗</span>';
+  $("#authTitle").innerHTML = signIn ? 'Your people.<br><span>Your watch party.</span>' : 'Make it a<br><span>shared moment.</span>';
+  setMessage("#authMessage", "");
+}
+$("#signInTab").addEventListener("click", () => updateAuthMode("signin"));
+$("#signUpTab").addEventListener("click", () => updateAuthMode("signup"));
+$("#authForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!auth) return setMessage("#authMessage", "Firebase is not configured yet. See README.md.", "error");
+  const email = $("#emailInput").value.trim();
+  const password = $("#passwordInput").value;
+  const button = $("#authSubmit");
+  setBusy(button, true);
+  try {
+    if (authMode === "signin") {
+      await signInWithEmailAndPassword(auth, email, password);
+    } else {
+      const displayName = $("#displayNameInput").value.trim() || email.split("@")[0];
+      const credential = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(credential.user, { displayName });
+    }
+  } catch (error) {
+    const friendly = ({
+      "auth/invalid-credential": "Email or password is incorrect.",
+      "auth/email-already-in-use": "An account already exists for this email.",
+      "auth/weak-password": "Choose a password with at least 6 characters.",
+      "auth/invalid-email": "Enter a valid email address.",
+      "auth/network-request-failed": "Network error. Check your internet connection."
+    })[error.code] || error.message || "Authentication failed.";
+    setMessage("#authMessage", friendly, "error");
+  } finally { setBusy(button, false); }
+});
+$("#pendingSignOut").addEventListener("click", () => auth && signOut(auth));
+$("#signOutBtn").addEventListener("click", () => auth && signOut(auth));
+$("#topSignOutBtn").addEventListener("click", () => auth && signOut(auth));
+$("#copyUidBtn").addEventListener("click", async () => {
+  const uid = currentUser?.uid || $("#pendingUid").textContent;
+  try { await navigator.clipboard.writeText(uid); toast("Firebase UID copied"); }
+  catch { toast("Select and copy your UID manually"); }
+});
+
+if (auth) onAuthStateChanged(auth, async (user) => {
+  currentUser = user;
+  if (!user) {
+    cleanupRoomListeners();
+    if (ownerMembersUnsub) { ownerMembersUnsub(); ownerMembersUnsub = null; }
+    activeRoomCode = null; roomMeta = null; sharedPlayback = null; memberProfile = null;
+    showGate("auth");
+    return;
+  }
+  showGate("pending");
+  $("#pendingUid").textContent = user.uid;
+  try {
+    const snapshot = await get(ref(db, `members/${user.uid}`));
+    memberProfile = snapshot.exists() ? snapshot.val() : null;
+    if (!memberProfile || memberProfile.active !== true) {
+      setMessage("#pendingMessage", "Your account is waiting for the owner to approve this UID.");
+      showGate("pending");
+      return;
+    }
+    isOwner = memberProfile.role === "owner";
+    memberProfile.displayName = memberProfile.displayName || user.displayName || user.email?.split("@")[0] || "Member";
+    openApp();
+  } catch (error) {
+    setMessage("#pendingMessage", `Could not check membership: ${error.message}. Verify your Realtime Database rules.`, "error");
+    showGate("pending");
+  }
+});
+
+function openApp() {
+  showGate("app");
+  const name = userName();
+  $("#sidebarName").textContent = name;
+  $("#sidebarRole").textContent = isOwner ? "ROOM OWNER" : "MEMBER";
+  $("#sidebarAvatar").textContent = initials(name);
+  $("#topAvatar").textContent = initials(name);
+  $("#ownerPanel").classList.toggle("hidden", !isOwner);
+  if (isOwner) listenOwnerMembers();
+  loadYouTubeApi();
+  updateHostControls();
+  processIncomingShare();
+}
+
+// Import a YouTube playlist directly. No YouTube Data API key or search quota is used.
+function showQueueMessage(title, message) {
+  const list = $("#playlistItems");
+  list.replaceChildren();
+  const empty = document.createElement("div"); empty.className = "queue-empty";
+  const mark = document.createElement("span"); mark.className = "queue-empty-mark"; mark.textContent = "♫";
+  const heading = document.createElement("strong"); heading.textContent = title;
+  const copy = document.createElement("p"); copy.textContent = message;
+  empty.append(mark, heading, copy); list.append(empty);
+  $("#queueCount").textContent = "0 items";
+}
+function splitSafeQueue(value) {
+  if (Array.isArray(value)) return value.map(safeVideoId).filter(Boolean).slice(0, 100);
+  if (typeof value !== "string" || !value) return [];
+  return value.split(",").map(safeVideoId).filter(Boolean).slice(0, 100);
+}
+function hasPlaylistPlayback(playback) {
+  return Boolean(safePlaylistId(playback?.playlistId || "") || splitSafeQueue(playback?.queueIds).length || safeVideoId(playback?.videoId || ""));
+}
+function hasActivePlaylist() { return Boolean(currentPlaylistId || currentQueueIds.length); }
+function canHostEditRoom() { return Boolean(activeRoomCode && roomIsHost()); }
+function updateHostControls() {
+  const canEdit = canHostEditRoom();
+  $("#playlistInput").disabled = !canEdit;
+  $("#playlistForm button[type=submit]").disabled = !canEdit;
+  $("#bulkVideoInput").disabled = !canEdit;
+  $("#bulkQueueForm button[type=submit]").disabled = !canEdit;
+  $("#bulkQueueBuilder").classList.toggle("host-disabled", !canEdit);
+  $("#hostPlaybackControls").classList.toggle("hidden", !canEdit);
+  updateMemberStartOverlay();
+  if (!canEdit) $("#bulkQueueBuilder").open = false;
+  $("#hostNotice").classList.toggle("hidden", !activeRoomCode || roomIsHost());
+  $("#hostNotice").textContent = "You are watching the room's shared playlist. Only the host can load videos, change the queue, or control playback.";
+  $("#playlistInput").placeholder = canEdit ? "Add a YouTube playlist or video to the room…" : "Only the room host can load videos";
+}
+function requestSharedPlayback(resource) {
+  if (!activeRoomCode) {
+    pendingIncomingShare = resource;
+    toast("Create or join a room before loading a playlist.");
+    openRoomModal("join");
+    return;
+  }
+  if (!roomIsHost()) return toast("Only the room host can change the shared playlist.");
+  if (resource.kind === "playlist") setSharedPlaylist(resource);
+  else if (resource.kind === "queue") setSharedQueue(resource);
+  else setSharedVideo({ videoId: resource.videoId, title: "YouTube video", channel: "Added to the shared room" });
+}
+$("#playlistForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!canHostEditRoom()) return toast(activeRoomCode ? "Only the room host can load videos." : "Create or join a room first.");
+  const value = $("#playlistInput").value.trim();
+  if (!value) return toast("Paste a YouTube playlist or video link first");
+  const resource = parseYouTubeLink(value);
+  if (!resource) return toast("That link is not recognised. Use a YouTube video or playlist URL.");
+  $("#playlistInput").value = "";
+  requestSharedPlayback(resource);
+  toast(resource.kind === "playlist" ? "Loading the shared playlist" : "Loading shared video");
+});
+$("#bulkQueueForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!canHostEditRoom()) return toast(activeRoomCode ? "Only the room host can change the shared queue." : "Create or join a room first.");
+  const lines = $("#bulkVideoInput").value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (!lines.length) return toast("Add at least one YouTube video link");
+  if (lines.length > 100) return toast("A custom queue can contain up to 100 videos");
+  const ids = [];
+  for (const line of lines) {
+    const item = parseYouTubeLink(line);
+    if (!item || item.kind !== "video") return toast("Each line must be a single YouTube video link or video ID");
+    if (!ids.includes(item.videoId)) ids.push(item.videoId);
+  }
+  if (!ids.length) return toast("No valid videos found in that list");
+  setSharedQueue({ kind: "queue", videoIds: ids, title: "Room playlist queue" });
+  $("#bulkVideoInput").value = "";
+  $("#bulkQueueBuilder").open = false;
+  toast(`Shared ${ids.length} videos with the room`);
+});
+$("#scrollQueueBtn").addEventListener("click", () => $("#queuePanel").scrollIntoView({ behavior: "smooth", block: "start" }));
+
+// Official YouTube IFrame Player. YouTube hosts the media and owns its playback controls.
+function loadYouTubeApi() {
+  if (window.YT?.Player) return createPlayer();
+  if (document.querySelector('script[data-youtube-iframe-api="1"]')) return;
+  const script = document.createElement("script");
+  script.src = "https://www.youtube.com/iframe_api";
+  script.dataset.youtubeIframeApi = "1";
+  script.onerror = () => toast("YouTube player could not load. Check your connection.");
+  document.head.append(script);
+  window.onYouTubeIframeAPIReady = createPlayer;
+}
+function createPlayer() {
+  if (ytPlayer || !window.YT?.Player) return;
+  ytPlayer = new window.YT.Player("player", {
+    width: "100%", height: "100%", videoId: "",
+    playerVars: { autoplay: 0, controls: 0, disablekb: 1, rel: 0, playsinline: 1, enablejsapi: 1, origin: window.location.origin },
+    events: { onReady: () => {
+      playerReady = true;
+      if (activeRoomCode && hasPlaylistPlayback(sharedPlayback)) applyRemotePlayback(sharedPlayback);
+      else {
+        showPlayerEmpty(true);
+        showQueueMessage("No shared playlist yet", activeRoomCode ? "The host can load a YouTube playlist or add videos to the room." : "Create or join a private room to start watching together.");
+      }
+    }, onStateChange: onPlayerStateChange, onError: onPlayerError }
+  });
+}
+function showPlayerEmpty(show) { $("#playerEmpty").classList.toggle("hidden", !show); }
+function updateNowPlaying(video) {
+  if (!video) return;
+  currentVideoMeta = { ...video };
+  $("#playingTitle").textContent = video.title || "YouTube video";
+  $("#playingChannel").textContent = video.channel || "YouTube";
+  $("#playingModeLabel").textContent = "SHARED ROOM PLAYBACK";
+  $("#openOnYoutubeBtn").disabled = !(video.videoId || currentPlaylistId);
+  $("#playerStateBadge").classList.remove("playing");
+  $("#playerStateBadge").innerHTML = "<span></span> READY";
+  showPlayerEmpty(false);
+}
+
+function setPlayerState(state) {
+  const badge = $("#playerStateBadge");
+  const playing = state === "playing";
+  badge.classList.toggle("playing", playing);
+  badge.innerHTML = `<span></span> ${state.toUpperCase()}`;
+  syncHostPlaybackControls();
+}
+function refreshCurrentPlaylistPosition() {
+  if (!ytPlayer || !hasActivePlaylist()) return;
+  try {
+    const ids = ytPlayer.getPlaylist?.() || [];
+    const index = Number(ytPlayer.getPlaylistIndex?.());
+    if (Number.isInteger(index) && index >= 0) currentPlaylistIndex = index;
+    const id = ids[currentPlaylistIndex];
+    if (safeVideoId(id)) currentVideoId = id;
+    const data = ytPlayer.getVideoData?.() || {};
+    if (safeVideoId(data.video_id)) currentVideoId = data.video_id;
+    $("#openOnYoutubeBtn").disabled = !(currentVideoId || currentPlaylistId);
+    if (data.title) {
+      currentVideoMeta = { videoId: currentVideoId, title: data.title, channel: data.author || "YouTube playlist" };
+      $("#playingTitle").textContent = data.title;
+      $("#playingChannel").textContent = `${data.author || "YouTube"} · Episode ${currentPlaylistIndex + 1}`;
+    }
+    renderPlaylistQueue();
+  } catch { /* playlist metadata may not be ready yet */ }
+}
+function renderPlaylistQueue() {
+  const list = $("#playlistItems");
+  if (!list) return;
+  let ids = [];
+  try { ids = hasActivePlaylist() && ytPlayer?.getPlaylist ? (ytPlayer.getPlaylist() || []) : []; } catch { ids = []; }
+  list.replaceChildren();
+  if (!ids.length) {
+    const empty = document.createElement("div"); empty.className = "queue-empty";
+    const mark = document.createElement("span"); mark.className = "queue-empty-mark"; mark.textContent = "♫";
+    const heading = document.createElement("strong"); heading.textContent = hasActivePlaylist() ? "Loading playlist items…" : "No shared queue yet";
+    const copy = document.createElement("p"); copy.textContent = hasActivePlaylist() ? "YouTube is preparing the playlist." : (roomIsHost() ? "Load a playlist or build a queue above." : "The host has not added a playlist yet.");
+    empty.append(mark, heading, copy); list.append(empty);
+    $("#queueCount").textContent = hasActivePlaylist() ? "Loading" : "0 items";
+    return;
+  }
+  $("#queueCount").textContent = `${ids.length} episodes`;
+  ids.slice(0, 100).forEach((id, index) => {
+    const item = document.createElement("button"); item.type = "button"; item.className = `queue-item${index === currentPlaylistIndex ? " active" : ""}`;
+    item.disabled = !roomIsHost();
+    const thumb = document.createElement("img"); thumb.className = "queue-thumb"; thumb.loading = "lazy"; thumb.alt = ""; thumb.src = `https://i.ytimg.com/vi/${encodeURIComponent(id)}/mqdefault.jpg`;
+    const text = document.createElement("span"); text.className = "queue-item-copy";
+    const title = document.createElement("strong"); title.textContent = `Episode ${String(index + 1).padStart(2, "0")}`;
+    const sub = document.createElement("small"); sub.textContent = index === currentPlaylistIndex ? "Now playing" : (roomIsHost() ? "Play this episode" : "Host controls episode selection");
+    text.append(title, sub);
+    const play = document.createElement("span"); play.className = "queue-play"; play.textContent = index === currentPlaylistIndex ? "●" : "▶";
+    item.append(thumb, text, play);
+    item.addEventListener("click", () => {
+      if (!roomIsHost()) return toast("Only the room host can change the shared episode");
+      if (!ytPlayer) return;
+      ytPlayer.playVideoAt(index); currentPlaylistIndex = index;
+    });
+    list.append(item);
+  });
+  if (ids.length > 100) {
+    const note = document.createElement("p"); note.className = "queue-note"; note.textContent = "Showing the first 100 episodes. Use YouTube's player controls to navigate the full playlist."; list.append(note);
+  }
+}
+function onPlayerStateChange(event) {
+  if (event.data === window.YT.PlayerState.PLAYING) setPlayerState("playing");
+  else if (event.data === window.YT.PlayerState.PAUSED) setPlayerState("paused");
+  else if (event.data === window.YT.PlayerState.ENDED) setPlayerState("ended");
+  else if (event.data === window.YT.PlayerState.BUFFERING) setPlayerState("buffering");
+  updateMemberStartOverlay();
+  if (hasActivePlaylist()) refreshCurrentPlaylistPosition();
+  if (!activeRoomCode || !roomIsHost()) {
+    // A viewer may tap the video surface, but local pause/play must not break room sync.
+    if (activeRoomCode && sharedPlayback) {
+      if (sharedPlayback.state === "playing" && event.data === window.YT.PlayerState.PAUSED) ytPlayer.playVideo();
+      else if (sharedPlayback.state !== "playing" && event.data === window.YT.PlayerState.PLAYING) ytPlayer.pauseVideo();
+    }
+    return;
+  }
+  const state = event.data === window.YT.PlayerState.PLAYING ? "playing" : event.data === window.YT.PlayerState.ENDED ? "ended" : event.data === window.YT.PlayerState.PAUSED ? "paused" : null;
+  if (state) {
+    if (hasActivePlaylist()) refreshCurrentPlaylistPosition();
+    const data = ytPlayer?.getVideoData?.() || {};
+    if (safeVideoId(data.video_id)) currentVideoId = data.video_id;
+    if (data.title) currentVideoMeta = { videoId: currentVideoId, title: data.title, channel: data.author || "YouTube" };
+    publishPlayback(state, safeCurrentTime());
+  }
+}
+function safeCurrentTime() { try { return Math.max(0, Number(ytPlayer?.getCurrentTime?.() || 0)); } catch { return 0; } }
+function safePlayerState() { try { return ytPlayer?.getPlayerState?.(); } catch { return -1; } }
+function updateMemberStartOverlay() {
+  const needsTap = Boolean(activeRoomCode && !roomIsHost() && sharedPlayback?.state === "playing" && safePlayerState() !== window.YT?.PlayerState?.PLAYING);
+  $("#memberStartOverlay").classList.toggle("hidden", !needsTap);
+}
+$("#enablePlaybackBtn").addEventListener("click", () => {
+  if (!activeRoomCode || !playerReady || !ytPlayer || !sharedPlayback) return;
+  if (sharedPlayback.state === "playing") ytPlayer.playVideo();
+  else applyRemotePlayback(sharedPlayback);
+  window.setTimeout(updateMemberStartOverlay, 600);
+});
+function formatPlayerClock(value) {
+  const seconds = Math.max(0, Math.floor(Number(value) || 0));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainder = seconds % 60;
+  return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}` : `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+function syncHostPlaybackControls() {
+  if (!playerReady || !ytPlayer || !canHostEditRoom()) return;
+  const duration = Math.max(0, Number(ytPlayer.getDuration?.() || 0));
+  const position = Math.max(0, safeCurrentTime());
+  $("#currentTimeLabel").textContent = formatPlayerClock(position);
+  $("#durationTimeLabel").textContent = formatPlayerClock(duration);
+  const seek = $("#playbackSeek");
+  if (document.activeElement !== seek && duration > 0) seek.value = String(Math.round(Math.min(1, position / duration) * 1000));
+  seek.disabled = duration <= 0;
+  const state = safePlayerState();
+  $("#hostPlayPauseBtn").textContent = state === window.YT.PlayerState.PLAYING ? "Ⅱ Pause" : "▶ Play";
+  let playlistLength = 0;
+  try { playlistLength = hasActivePlaylist() ? (ytPlayer.getPlaylist?.() || []).length : 0; } catch { playlistLength = 0; }
+  $("#previousVideoBtn").disabled = playlistLength < 2;
+  $("#nextVideoBtn").disabled = playlistLength < 2;
+}
+$("#hostPlayPauseBtn").addEventListener("click", () => {
+  if (!canHostEditRoom() || !playerReady || !ytPlayer) return;
+  if (safePlayerState() === window.YT.PlayerState.PLAYING) ytPlayer.pauseVideo();
+  else ytPlayer.playVideo();
+});
+$("#previousVideoBtn").addEventListener("click", () => {
+  if (!canHostEditRoom() || !playerReady || !ytPlayer) return;
+  if (safeCurrentTime() > 3) {
+    ytPlayer.seekTo(0, true);
+    window.setTimeout(() => publishPlayback(safePlayerState() === window.YT.PlayerState.PLAYING ? "playing" : "paused", 0), 250);
+  } else {
+    ytPlayer.previousVideo();
+    window.setTimeout(refreshCurrentPlaylistPosition, 500);
+  }
+});
+$("#nextVideoBtn").addEventListener("click", () => {
+  if (!canHostEditRoom() || !playerReady || !ytPlayer) return;
+  ytPlayer.nextVideo();
+  window.setTimeout(refreshCurrentPlaylistPosition, 500);
+});
+$("#playbackSeek").addEventListener("change", (event) => {
+  if (!canHostEditRoom() || !playerReady || !ytPlayer) return;
+  const duration = Math.max(0, Number(ytPlayer.getDuration?.() || 0));
+  if (!duration) return;
+  const position = duration * (Number(event.target.value) / 1000);
+  ytPlayer.seekTo(position, true);
+  window.setTimeout(() => publishPlayback(safePlayerState() === window.YT.PlayerState.PLAYING ? "playing" : "paused", position), 250);
+  syncHostPlaybackControls();
+});
+setInterval(syncHostPlaybackControls, 1000);
+function onPlayerError(event) {
+  const messages = { 2: "Invalid YouTube video or playlist.", 5: "This video cannot be played in the HTML5 player.", 100: "This video is unavailable or was removed.", 101: "The owner does not allow this video to be embedded.", 150: "The owner does not allow this video to be embedded.", 153: "YouTube did not receive a valid referrer. Open SyncTube using your GitHub Pages URL." };
+  toast(messages[event.data] || `YouTube player error (${event.data}).`);
+  setPlayerState("unavailable");
+}
+function setSharedVideo(video) {
+  if (!activeRoomCode || !roomIsHost()) return toast("Only the room host can change shared playback");
+  const id = safeVideoId(video.videoId);
+  if (!id) return toast("That video ID is not valid");
+  currentPlaylistId = ""; currentQueueIds = []; currentPlaylistIndex = 0;
+  const payload = { videoId: id, videoTitle: video.title || "Shared room video", channelTitle: video.channel || "YouTube", playlistId: "", queueIds: "", playlistIndex: 0, state: "playing", positionSec: 0, updatedAt: serverTimestamp(), updatedBy: currentUser.uid };
+  set(ref(db, `rooms/${activeRoomCode}/playback`), payload).then(() => {
+    sharedPlayback = { ...payload, updatedAt: Date.now() + serverTimeOffset };
+    currentVideoId = id;
+    updateNowPlaying(video);
+    if (playerReady && ytPlayer) ytPlayer.loadVideoById({ videoId: id });
+    renderPlaylistQueue(); toast("Shared video sent to the room");
+  }).catch((error) => toast(`Could not update the room: ${error.message}`));
+}
+function setSharedPlaylist(playlist) {
+  if (!activeRoomCode || !roomIsHost()) return toast("Only the room host can change shared playback");
+  const id = safePlaylistId(playlist.playlistId);
+  if (!id) return toast("That YouTube playlist link is not valid");
+  currentPlaylistId = id; currentQueueIds = []; currentPlaylistIndex = 0; currentVideoId = "";
+  const payload = { videoId: "", videoTitle: playlist.title || "Shared YouTube playlist", channelTitle: "YouTube playlist", playlistId: id, queueIds: "", playlistIndex: 0, state: "playing", positionSec: 0, updatedAt: serverTimestamp(), updatedBy: currentUser.uid };
+  set(ref(db, `rooms/${activeRoomCode}/playback`), payload).then(() => {
+    sharedPlayback = { ...payload, updatedAt: Date.now() + serverTimeOffset };
+    updateNowPlaying({ title: playlist.title || "Shared YouTube playlist", channel: "Loading episodes from YouTube" });
+    if (playerReady && ytPlayer) ytPlayer.loadPlaylist({ listType: "playlist", list: id, index: 0 });
+    window.setTimeout(renderPlaylistQueue, 1200);
+    toast("Playlist shared with the room");
+  }).catch((error) => toast(`Could not share playlist: ${error.message}`));
+}
+function setSharedQueue(queue) {
+  if (!activeRoomCode || !roomIsHost()) return toast("Only the room host can change shared playback");
+  const ids = splitSafeQueue(queue.videoIds);
+  if (!ids.length) return toast("This custom queue has no valid video IDs");
+  const playlistIndex = Math.min(ids.length - 1, Math.max(0, Math.floor(Number(queue.playlistIndex) || 0)));
+  const positionSec = Math.max(0, Number(queue.positionSec) || 0);
+  const playbackState = queue.state === "paused" ? "paused" : "playing";
+  currentPlaylistId = ""; currentQueueIds = ids; currentPlaylistIndex = playlistIndex; currentVideoId = "";
+  const payload = { videoId: "", videoTitle: queue.title || "Shared custom queue", channelTitle: "SyncTube playlist", playlistId: "", queueIds: ids.join(","), playlistIndex, state: playbackState, positionSec, updatedAt: serverTimestamp(), updatedBy: currentUser.uid };
+  set(ref(db, `rooms/${activeRoomCode}/playback`), payload).then(() => {
+    sharedPlayback = { ...payload, updatedAt: Date.now() + serverTimeOffset };
+    updateNowPlaying({ title: queue.title || "Shared custom queue", channel: `${ids.length} videos · shared queue` });
+    if (playerReady && ytPlayer) {
+      ytPlayer.loadPlaylist({ list: ids, index: playlistIndex, startSeconds: positionSec });
+      if (playbackState === "paused") window.setTimeout(() => { if (safePlayerState() === window.YT.PlayerState.PLAYING) ytPlayer.pauseVideo(); }, 900);
+    }
+    window.setTimeout(renderPlaylistQueue, 1200);
+    toast("Custom queue shared with the room");
+  }).catch((error) => toast(`Could not share queue: ${error.message}`));
+}
+function appendVideoToSharedQueue(videoId) {
+  if (!roomIsHost()) return toast("Only the room host can add videos to the shared queue");
+  const id = safeVideoId(videoId);
+  if (!id) return toast("That YouTube video link is not valid");
+  let ids = currentQueueIds.slice();
+  if (currentPlaylistId && playerReady && ytPlayer) {
+    try { ids = (ytPlayer.getPlaylist?.() || []).map(safeVideoId).filter(Boolean).slice(0, 100); } catch { ids = []; }
+  }
+  if (!ids.length && currentVideoId) ids = [currentVideoId];
+  if (ids.includes(id)) return toast("That video is already in the shared queue");
+  if (ids.length >= 100) return toast("The shared custom queue is full (100 videos)");
+  const index = Math.max(0, Math.min(ids.length - 1, currentPlaylistIndex));
+  const positionSec = safeCurrentTime();
+  ids.push(id);
+  setSharedQueue({ videoIds: ids, playlistIndex: index, positionSec, state: sharedPlayback?.state === "paused" ? "paused" : "playing", title: "Shared room queue" });
+  toast("Video added to the end of the shared queue");
+}
+function publishPlayback(state, positionSec) {
+  if (!activeRoomCode || !roomIsHost() || (!currentVideoId && !currentPlaylistId && !currentQueueIds.length)) return;
+  if (Date.now() - lastPublishAt < 450 && state === "playing") return;
+  lastPublishAt = Date.now();
+  const payload = { videoId: currentVideoId || "", videoTitle: currentVideoMeta?.title || (currentPlaylistId ? "YouTube playlist" : currentQueueIds.length ? "Custom video queue" : "Shared room video"), channelTitle: currentVideoMeta?.channel || "YouTube", playlistId: currentPlaylistId || "", queueIds: currentQueueIds.join(","), playlistIndex: hasActivePlaylist() ? Math.max(0, currentPlaylistIndex) : 0, state, positionSec: Math.max(0, Number(positionSec) || 0), updatedAt: serverTimestamp(), updatedBy: currentUser.uid };
+  set(ref(db, `rooms/${activeRoomCode}/playback`), payload).catch((error) => toast(`Sync update failed: ${error.message}`));
+}
+function applyRemotePlayback(playback) {
+  if (!playerReady || !ytPlayer || !activeRoomCode || !playback) return;
+  const nativePlaylistId = safePlaylistId(playback.playlistId || "");
+  const remoteQueueIds = splitSafeQueue(playback.queueIds);
+  const isQueue = Boolean(nativePlaylistId || remoteQueueIds.length);
+  if (!isQueue && !safeVideoId(playback.videoId || "")) return;
+  const serverNow = Date.now() + serverTimeOffset;
+  const age = Math.max(0, (serverNow - Number(playback.updatedAt || serverNow)) / 1000);
+  const expected = Math.max(0, Number(playback.positionSec || 0) + (playback.state === "playing" ? age : 0));
+  const currentState = safePlayerState();
+  const drift = Math.abs(safeCurrentTime() - expected);
+  if (isQueue) {
+    const index = Math.max(0, Math.floor(Number(playback.playlistIndex || 0)));
+    const nextQueue = nativePlaylistId ? [] : remoteQueueIds;
+    const nextSignature = nativePlaylistId ? `youtube:${nativePlaylistId}` : `custom:${remoteQueueIds.join(",")}`;
+    const currentSignature = currentPlaylistId ? `youtube:${currentPlaylistId}` : currentQueueIds.length ? `custom:${currentQueueIds.join(",")}` : "";
+    const changed = currentSignature !== nextSignature || currentPlaylistIndex !== index;
+    if (changed) {
+      currentPlaylistId = nativePlaylistId; currentQueueIds = nextQueue; currentPlaylistIndex = index; currentVideoId = safeVideoId(playback.videoId || "");
+      updateNowPlaying({ videoId: currentVideoId, title: playback.videoTitle || "YouTube playlist", channel: playback.channelTitle || `Episode ${index + 1}` });
+      const list = nativePlaylistId ? nativePlaylistId : remoteQueueIds;
+      ytPlayer.loadPlaylist({ listType: "playlist", list, index, startSeconds: expected });
+      if (playback.state !== "playing") window.setTimeout(() => { if (activeRoomCode && safePlayerState() === window.YT.PlayerState.PLAYING) ytPlayer.pauseVideo(); }, 900);
+      window.setTimeout(() => { renderPlaylistQueue(); updateMemberStartOverlay(); }, 1300);
+      updateMemberStartOverlay();
+      return;
+    }
+    if (safeVideoId(playback.videoId || "") && currentVideoId !== playback.videoId) {
+      currentVideoId = playback.videoId;
+      const list = nativePlaylistId ? nativePlaylistId : remoteQueueIds;
+      ytPlayer.loadPlaylist({ listType: "playlist", list, index, startSeconds: expected });
+      return;
+    }
+  } else {
+    if (currentVideoId !== playback.videoId || hasActivePlaylist()) {
+      currentPlaylistId = ""; currentQueueIds = []; currentPlaylistIndex = 0; currentVideoId = playback.videoId;
+      updateNowPlaying({ videoId: playback.videoId, title: playback.videoTitle || "Shared room video", channel: playback.channelTitle || "Playing in sync" });
+      ytPlayer.loadVideoById({ videoId: playback.videoId, startSeconds: expected });
+      if (playback.state !== "playing") window.setTimeout(() => { if (activeRoomCode && safePlayerState() === window.YT.PlayerState.PLAYING) ytPlayer.pauseVideo(); }, 600);
+      renderPlaylistQueue(); updateMemberStartOverlay(); return;
+    }
+  }
+  if (drift > 2.4) ytPlayer.seekTo(expected, true);
+  if (playback.state === "playing" && currentState !== window.YT.PlayerState.PLAYING) ytPlayer.playVideo();
+  if (playback.state !== "playing" && currentState === window.YT.PlayerState.PLAYING) ytPlayer.pauseVideo();
+  if (playback.state === "ended" && currentState !== window.YT.PlayerState.ENDED) ytPlayer.seekTo(expected, true);
+  updateMemberStartOverlay();
+}
+setInterval(() => {
+  if (!activeRoomCode || !hasPlaylistPlayback(sharedPlayback) || !playerReady) return;
+  const serverNow = Date.now() + serverTimeOffset;
+  const expected = Math.max(0, Number(sharedPlayback.positionSec || 0) + (sharedPlayback.state === "playing" ? Math.max(0, serverNow - Number(sharedPlayback.updatedAt || serverNow)) / 1000 : 0));
+  const actual = safeCurrentTime();
+  const drift = Math.abs(actual - expected);
+  if (roomIsHost()) {
+    if (drift > 3.5 && Date.now() - lastPublishAt > 1800) {
+      const stateCode = safePlayerState();
+      const state = stateCode === window.YT.PlayerState.PLAYING ? "playing" : stateCode === window.YT.PlayerState.ENDED ? "ended" : "paused";
+      if (hasActivePlaylist()) refreshCurrentPlaylistPosition();
+      publishPlayback(state, actual);
+    }
+  } else if (drift > 2.8) applyRemotePlayback(sharedPlayback);
+}, 3500);
+$("#openOnYoutubeBtn").addEventListener("click", () => {
+  if (currentPlaylistId) window.open(`https://www.youtube.com/playlist?list=${encodeURIComponent(currentPlaylistId)}`, "_blank", "noopener,noreferrer");
+  else if (currentVideoId) window.open(`https://www.youtube.com/watch?v=${encodeURIComponent(currentVideoId)}`, "_blank", "noopener,noreferrer");
+});
+
+// Rooms, shared playback, presence and chat.
+function makeRoomCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = new Uint8Array(6); crypto.getRandomValues(bytes);
+  return [...bytes].map((byte) => alphabet[byte % alphabet.length]).join("");
+}
+function cleanupRoomListeners() {
+  roomUnsubs.forEach((unsubscribe) => { try { unsubscribe(); } catch { /* no-op */ } });
+  roomUnsubs = [];
+}
+async function createRoom(name) {
+  if (!activeMember()) throw new Error("Your account is not approved.");
+  if (activeRoomCode) await leaveRoom(false);
+  let code = "";
+  for (let attempt = 0; attempt < 5; attempt++) {
+    code = makeRoomCode();
+    const existing = await get(ref(db, `rooms/${code}/meta`));
+    if (!existing.exists()) break;
+    code = "";
+  }
+  if (!code) throw new Error("Could not reserve a room code. Try again.");
+  await set(ref(db, `rooms/${code}/meta`), { ownerUid: currentUser.uid, name: name || "The Watch Lounge", createdAt: serverTimestamp() });
+  await set(ref(db, `rooms/${code}/participants/${currentUser.uid}`), true);
+  await set(ref(db, `rooms/${code}/playback`), { videoId: "", videoTitle: "", channelTitle: "", playlistId: "", queueIds: "", playlistIndex: 0, state: "paused", positionSec: 0, updatedAt: serverTimestamp(), updatedBy: currentUser.uid });
+  await enterRoom(code);
+}
+async function joinRoom(codeValue) {
+  if (!activeMember()) throw new Error("Your account is not approved.");
+  const code = String(codeValue || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!/^[A-Z0-9]{6}$/.test(code)) throw new Error("Enter the 6-character room code.");
+  const metaSnap = await get(ref(db, `rooms/${code}/meta`));
+  if (!metaSnap.exists()) throw new Error("Room not found. Check the code with your friend.");
+  await set(ref(db, `rooms/${code}/participants/${currentUser.uid}`), true);
+  await enterRoom(code);
+}
+async function enterRoom(code) {
+  cleanupRoomListeners();
+  activeRoomCode = code;
+  sharedPlayback = null;
+  const base = `rooms/${code}`;
+  const metaSnap = await get(ref(db, `${base}/meta`));
+  roomMeta = metaSnap.val() || null;
+  if (!roomMeta) throw new Error("This room no longer exists.");
+  const presenceRef = ref(db, `${base}/presence/${currentUser.uid}`);
+  await set(presenceRef, { name: userName(), online: true, seenAt: serverTimestamp() });
+  await onDisconnect(presenceRef).remove();
+  roomUnsubs.push(onValue(ref(db, `${base}/meta`), (snap) => {
+    roomMeta = snap.val() || null;
+    renderRoomMeta();
+  }));
+  // Wait for the listener's initial snapshot before processing a share intent. This
+  // prevents a shared episode from replacing a queue before the existing room queue loads.
+  await new Promise((resolve, reject) => {
+    let initialSnapshot = true;
+    const unsubscribe = onValue(ref(db, `${base}/playback`), (snap) => {
+      sharedPlayback = snap.val() || null;
+      if (hasPlaylistPlayback(sharedPlayback)) applyRemotePlayback(sharedPlayback);
+      else if (playerReady) {
+        showPlayerEmpty(true);
+        $("#playingTitle").textContent = "Waiting for the host";
+        $("#playingChannel").textContent = "The host has not started a video yet";
+        $("#playingModeLabel").textContent = "SHARED ROOM PLAYBACK";
+        showQueueMessage("No shared playlist yet", roomIsHost() ? "Load a YouTube playlist or add videos to the room." : "The host has not added a playlist yet.");
+      }
+      if (initialSnapshot) { initialSnapshot = false; resolve(); }
+    }, (error) => reject(error));
+    roomUnsubs.push(unsubscribe);
+  });
+  roomUnsubs.push(onValue(ref(db, `${base}/participants`), (snap) => renderParticipants(snap.val() || {})));
+  roomUnsubs.push(onValue(ref(db, `${base}/presence`), (snap) => renderPresence(snap.val() || {})));
+  roomUnsubs.push(onValue(query(ref(db, `${base}/chat`), limitToLast(35)), (snap) => renderChat(snap.val() || {})));
+  renderRoomMeta();
+  updateHostControls();
+  $("#roomEmpty").classList.add("hidden");
+  $("#roomActive").classList.remove("hidden");
+  $("#roomChip").classList.add("active");
+  $("#roomChipText").textContent = `Room ${code}`;
+  $("#roomStatus").classList.add("active");
+  $("#roomStatus").innerHTML = "<i></i> LIVE";
+  if (playerReady && hasPlaylistPlayback(sharedPlayback)) applyRemotePlayback(sharedPlayback);
+  importIncomingShare();
+  toast(`Joined room ${code}`);
+}
+async function leaveRoom(showToast = true) {
+  if (!activeRoomCode) return;
+  const oldCode = activeRoomCode;
+  cleanupRoomListeners();
+  try { await remove(ref(db, `rooms/${oldCode}/presence/${currentUser.uid}`)); } catch { /* onDisconnect also clears presence */ }
+  activeRoomCode = null; roomMeta = null; sharedPlayback = null;
+  currentPlaylistId = ""; currentQueueIds = []; currentPlaylistIndex = 0; currentVideoId = ""; currentVideoMeta = null;
+  if (playerReady && ytPlayer) ytPlayer.stopVideo();
+  showPlayerEmpty(true);
+  $("#playingTitle").textContent = "Join a room to get started";
+  $("#playingChannel").textContent = "The host starts one shared playlist for everyone";
+  $("#playingModeLabel").textContent = "ROOM PLAYBACK";
+  $("#roomActive").classList.add("hidden");
+  $("#roomEmpty").classList.remove("hidden");
+  $("#roomTitle").textContent = "No room active";
+  $("#roomChip").classList.remove("active");
+  $("#roomChipText").textContent = "No room joined";
+  $("#roomStatus").classList.remove("active");
+  $("#roomStatus").innerHTML = "<i></i> OFFLINE";
+  $("#roomRoleValue").textContent = "—";
+  updateHostControls();
+  showQueueMessage("No shared playlist yet", "Create or join a room to start watching together.");
+  if (showToast) toast(`Left room ${oldCode}`);
+}
+function renderRoomMeta() {
+  if (!activeRoomCode) return;
+  $("#roomTitle").textContent = roomMeta?.name || "Watch room";
+  $("#roomCodeDisplay").textContent = activeRoomCode;
+  $("#roomStatus").classList.add("active");
+  $("#roomStatus").innerHTML = "<i></i> LIVE";
+  $("#roomRoleValue").textContent = roomIsHost() ? "HOST" : "MEMBER";
+  updateHostControls();
+}
+
+let latestParticipants = {}, latestPresence = {};
+function renderParticipants(participants) {
+  latestParticipants = participants || {};
+  const count = Object.keys(latestParticipants).length;
+  $("#memberCount").textContent = String(count);
+  renderPeople();
+}
+function renderPresence(presence) {
+  latestPresence = presence || {};
+  $("#onlineCount").textContent = String(Object.values(latestPresence).filter((person) => person?.online).length);
+  renderPeople();
+}
+function renderPeople() {
+  const node = $("#roomPeople"); node.replaceChildren();
+  const entries = Object.keys(latestParticipants).slice(0, 16);
+  if (!entries.length) return;
+  entries.forEach((uid) => {
+    const presence = latestPresence[uid];
+    const pill = document.createElement("span"); pill.className = "person-pill";
+    const dot = document.createElement("i");
+    if (!presence?.online) dot.style.background = "#6d6a80";
+    const name = document.createElement("span"); name.textContent = presence?.name || `${uid.slice(0, 6)}…`;
+    pill.append(dot, name); node.append(pill);
+  });
+}
+function renderChat(messages) {
+  const box = $("#chatMessages"); box.replaceChildren();
+  const entries = Object.entries(messages).sort((a, b) => (a[1]?.createdAt || 0) - (b[1]?.createdAt || 0));
+  if (!entries.length) { const placeholder = document.createElement("div"); placeholder.className = "chat-placeholder"; placeholder.textContent = "Say hello to the room."; box.append(placeholder); return; }
+  entries.forEach(([, message]) => {
+    const line = document.createElement("div"); line.className = "chat-message";
+    const author = document.createElement("strong"); author.textContent = message.name || "Member";
+    const body = document.createElement("span"); body.textContent = message.text || "";
+    const time = document.createElement("time"); time.textContent = formatTime(message.createdAt);
+    line.append(author, body, time); box.append(line);
+  });
+  box.scrollTop = box.scrollHeight;
+}
+$("#chatForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!activeRoomCode) return toast("Join a room before chatting");
+  const textValue = $("#chatInput").value.trim();
+  if (!textValue) return;
+  $("#chatInput").value = "";
+  try {
+    const messageRef = push(ref(db, `rooms/${activeRoomCode}/chat`));
+    await set(messageRef, { uid: currentUser.uid, name: userName(), text: textValue, createdAt: serverTimestamp() });
+  } catch (error) { toast(`Message was not sent: ${error.message}`); }
+});
+$("#leaveRoomBtn").addEventListener("click", () => leaveRoom());
+$("#copyRoomCodeBtn").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(activeRoomCode || ""); toast("Room code copied"); }
+  catch { toast(`Room code: ${activeRoomCode}`); }
+});
+
+// Room modal actions.
+let roomModalMode = "create";
+function openRoomModal(mode) {
+  roomModalMode = mode;
+  const create = mode === "create";
+  $("#roomModalTitle").textContent = create ? "Create your room" : "Join your crew";
+  $("#roomModalCopy").textContent = create ? "Give your room a name your friends will recognise." : "Enter the 6-character invite code shared by your host.";
+  $("#roomNameWrap").classList.toggle("hidden", !create);
+  $("#roomCodeWrap").classList.toggle("hidden", create);
+  $("#roomModalSubmit").innerHTML = create ? 'Create room <span>↗</span>' : 'Join room <span>↗</span>';
+  setMessage("#roomModalMessage", "");
+  $("#roomModal").classList.remove("hidden");
+  setTimeout(() => (create ? $("#roomNameInput") : $("#roomCodeInput")).focus(), 20);
+}
+function closeRoomModal() { $("#roomModal").classList.add("hidden"); }
+$("#createRoomBtn").addEventListener("click", () => openRoomModal("create"));
+$("#joinRoomBtn").addEventListener("click", () => openRoomModal("join"));
+$("#roomCreateInline").addEventListener("click", () => openRoomModal("create"));
+$("#roomJoinInline").addEventListener("click", () => openRoomModal("join"));
+$$("[data-close-modal]").forEach((button) => button.addEventListener("click", closeRoomModal));
+$("#roomModal").addEventListener("click", (event) => { if (event.target === $("#roomModal")) closeRoomModal(); });
+$("#roomModalForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = $("#roomModalSubmit"); setBusy(button, true);
+  try {
+    if (roomModalMode === "create") await createRoom($("#roomNameInput").value.trim());
+    else await joinRoom($("#roomCodeInput").value.trim());
+    closeRoomModal();
+  } catch (error) { setMessage("#roomModalMessage", error.message || "Room action failed.", "error"); }
+  finally { setBusy(button, false); }
+});
+
+// Owner-only global allowlist management. New users register first, then share their UID.
+async function listenOwnerMembers() {
+  if (!isOwner) return;
+  if (ownerMembersUnsub) ownerMembersUnsub();
+  ownerMembersUnsub = onValue(ref(db, "members"), (snapshot) => {
+    const members = snapshot.val() || {};
+    const list = $("#memberList"); list.replaceChildren();
+    Object.entries(members).slice(0, 30).forEach(([uid, member]) => {
+      const row = document.createElement("div"); row.className = "member-item";
+      const id = document.createElement("span"); id.textContent = `${uid.slice(0, 9)}…`;
+      const role = document.createElement("span"); role.textContent = member.role === "owner" ? "OWNER" : member.active ? "ACTIVE" : "PAUSED";
+      row.append(id, role); list.append(row);
+    });
+  }, (error) => setMessage("#ownerMessage", `Member list error: ${error.message}`, "error"));
+}
+$("#addMemberForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!isOwner) return;
+  const uid = $("#memberUidInput").value.trim();
+  if (!/^[A-Za-z0-9_-]{10,128}$/.test(uid)) return setMessage("#ownerMessage", "That UID format does not look valid.", "error");
+  if (uid === currentUser.uid) return setMessage("#ownerMessage", "You are already the owner.", "error");
+  const button = $("#addMemberForm button[type=submit]"); setBusy(button, true, "Adding…");
+  try {
+    await set(ref(db, `members/${uid}`), { active: true, role: "member", addedBy: currentUser.uid, createdAt: serverTimestamp() });
+    $("#memberUidInput").value = "";
+    setMessage("#ownerMessage", "Member approved. They can now sign in and join rooms.", "success");
+  } catch (error) { setMessage("#ownerMessage", `Could not approve member: ${error.message}`, "error"); }
+  finally { setBusy(button, false); }
+});
+
+// PWA install prompt: browsers that support beforeinstallprompt can expose an in-app install button.
+let deferredInstallPrompt = null;
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  $("#installAppBtn").classList.remove("hidden");
+});
+$("#installAppBtn").addEventListener("click", async () => {
+  if (!deferredInstallPrompt) return toast("Open the browser menu and choose Install app or Add to Home screen");
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  $("#installAppBtn").classList.add("hidden");
+});
+window.addEventListener("appinstalled", () => {
+  $("#installAppBtn").classList.add("hidden");
+  toast("SyncTube installed. You can now share YouTube links to it.");
+});
+
+// Initial UI state and basic keyboard conveniences.
+showGate(configReady ? "auth" : "auth");
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  navigator.serviceWorker.register("./sw.js").catch(() => { /* share-to-app requires an installable PWA; app remains usable without SW */ });
+}
+showQueueMessage("No shared playlist yet", "Create or join a room. The host can load a playlist or add videos to the room.");
+document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeRoomModal(); });
