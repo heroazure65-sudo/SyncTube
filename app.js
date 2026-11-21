@@ -2,7 +2,8 @@ import { firebaseConfig } from "./firebase-config.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword,
-  createUserWithEmailAndPassword, updateProfile, signOut
+  createUserWithEmailAndPassword, updateProfile, signOut,
+  GoogleAuthProvider, signInWithPopup
 } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
 import {
   getDatabase, ref, get, set, update, push, onValue, query,
@@ -119,6 +120,7 @@ if (configReady) {
   setMessage("#authMessage", "Setup required: add your Firebase web-app values in firebase-config.js, then reload.", "error");
   $("#authSubmit").disabled = true;
   $("#signUpTab").disabled = true;
+  $("#googleSignInBtn").disabled = true;
 }
 
 // Authentication / invite-only membership gate.
@@ -160,6 +162,27 @@ $("#authForm").addEventListener("submit", async (event) => {
       "auth/invalid-email": "Enter a valid email address.",
       "auth/network-request-failed": "Network error. Check your internet connection."
     })[error.code] || error.message || "Authentication failed.";
+    setMessage("#authMessage", friendly, "error");
+  } finally { setBusy(button, false); }
+});
+
+// Google sign-in uses Firebase Authentication; no separate Google API key is needed.
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
+$("#googleSignInBtn").addEventListener("click", async () => {
+  if (!auth) return setMessage("#authMessage", "Firebase is not configured yet. See README.md.", "error");
+  const button = $("#googleSignInBtn");
+  setBusy(button, true, "Connecting to Google…");
+  try {
+    await signInWithPopup(auth, googleProvider);
+  } catch (error) {
+    const friendly = ({
+      "auth/popup-closed-by-user": "Google sign-in was closed before it finished.",
+      "auth/popup-blocked": "Your browser blocked the Google sign-in window. Allow pop-ups and try again.",
+      "auth/unauthorized-domain": "This website domain is not authorised in Firebase Authentication settings.",
+      "auth/account-exists-with-different-credential": "An account already exists with this email. Sign in using its original method.",
+      "auth/network-request-failed": "Network error. Check your internet connection."
+    })[error.code] || error.message || "Google sign-in failed.";
     setMessage("#authMessage", friendly, "error");
   } finally { setBusy(button, false); }
 });

@@ -1,11 +1,13 @@
-// Public Firebase browser configuration only. Replace these placeholders with your own Firebase web-app values.
-// No YouTube Data API key is required: SyncTube loads YouTube playlists through the official IFrame Player API.
+// SyncTube Firebase Web App configuration.
+// These browser values are intentionally public. Protect access with Firebase Authentication
+// and the Realtime Database rules in database.rules.json. Never put Admin SDK credentials here.
 export const firebaseConfig = {
-  apiKey: "YOUR_FIREBASE_WEB_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL: "https://YOUR_DATABASE_NAME-default-rtdb.YOUR_REGION.firebasedatabase.app",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_FIREBASE_APP_ID"
+  apiKey: "AIzaSyBS39ifLHIPtt9j93kxfqqFEr7C8T8_rg",
+  authDomain: "synctube-8888d.firebaseapp.com",
+  databaseURL: "https://synctube-8888d-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "synctube-8888d",
+  storageBucket: "synctube-8888d.firebasestorage.app",
+  messagingSenderId: "884359188559",
+  appId: "1:884359188559:web:88274974d46387a9a15a3a",
+  measurementId: "G-P9Y1R1GXPR"
 };

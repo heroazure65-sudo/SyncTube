@@ -1,4 +1,4 @@
-# SyncTube Pro — Shared Room Edition
+# SyncTube Pro — Firebase Configured Shared Room Edition
 
 SyncTube is a lightweight, private YouTube watch-party website designed for GitHub Pages and Firebase. **There is only one playback mode: Watch Together.** Each room has one shared YouTube player state and one shared playlist/queue. The room host controls playback; approved members watch the same room stream, chat, and see who is online.
 
@@ -32,29 +32,35 @@ SyncTube does not host or re-stream video. Each participant's browser loads the 
 
 ## Requirements
 
-1. A Firebase project with **Email/Password Authentication** and **Realtime Database** enabled.
+1. A Firebase project with **Google and/or Email/Password Authentication** and **Realtime Database** enabled.
 2. A GitHub account and a public repository for GitHub Pages Free.
 
-The browser loads Firebase JavaScript SDK 13.4.0 and the official YouTube IFrame Player API from their providers' CDNs. No YouTube Data API key, Firebase Admin key, Node build, application server, or paid hosting is required by this version.
+The browser loads Firebase JavaScript SDK 13.4.0 and the official YouTube IFrame Player API from their providers' CDNs. The Firebase config is already filled for project `synctube-8888d`. No YouTube Data API key, Firebase Admin key, Node build, application server, or paid hosting is required by this version.
 
-## 1. Configure Firebase
+## 1. Firebase project already configured in this package
 
-1. Open [Firebase Console](https://console.firebase.google.com/) and create a project.
-2. In **Build → Authentication → Sign-in method**, enable **Email/Password**.
-3. In **Build → Realtime Database**, create a database. Copy its exact database URL (it may end in `firebasedatabase.app` or `firebaseio.com`).
-4. In **Project settings → General → Your apps**, register a Web app and copy its Firebase configuration.
-5. Open `firebase-config.js` and replace every `YOUR_...` placeholder with the values from your Firebase Web app and Realtime Database console.
-6. In **Realtime Database → Rules**, paste the contents of `database.rules.json` and publish them.
-7. In Firebase Authentication → Settings → Authorized domains, add your GitHub Pages host after deployment (for example, `YOUR_GITHUB_USERNAME.github.io`). Add `localhost` only if testing locally.
+This package is pre-filled with the Firebase Web App configuration supplied for the user's project `synctube-8888d` and its Realtime Database in `asia-southeast1`. You do not need to create another Firebase project or replace the values in `firebase-config.js`.
+
+**Before the website can sign in or read/write data, finish these console steps:**
+
+1. Open [Firebase Console](https://console.firebase.google.com/) and select project **synctube-8888d**.
+2. Go to **Build → Authentication → Get started → Sign-in method**. Enable **Google**, choose a support email, and save. Email/Password is optional; the Google button is the intended easy-login route.
+3. Go to **Authentication → Settings → Authorized domains**. Add your GitHub Pages host, for example `YOUR_GITHUB_USERNAME.github.io` (do not include `https://` or a path). Add `localhost` only for local development.
+4. Open **Realtime Database → Rules**. Replace the editor contents with the complete contents of this package's `database.rules.json`, then press **Publish**. Keep the database in locked mode until these rules are published. Do not switch to test mode or make the database public.
+5. Confirm the Realtime Database URL shown in the console is `https://synctube-8888d-default-rtdb.asia-southeast1.firebasedatabase.app`.
+
+The package includes the actual browser configuration you supplied. The Firebase Web API key is not an Admin credential; it is expected to be visible in client-side code. Never publish a Firebase Admin service-account JSON, private key, database secret, or other server credential.
+
+Google sign-in uses Firebase Authentication's Google provider and the popup flow. It does not require a separate Google Cloud OAuth client ID or a YouTube API key in this client-side setup. Enable the Google provider in Firebase, set a support email, and authorise your deployed domain. Some browsers or embedded in-app browsers may block pop-ups; open the website in Chrome if sign-in is blocked.
 
 Do not use test-mode database rules. Do not publish a Firebase Admin service-account JSON, private key, database secret, or other server credential.
 
 ## 2. Create the first owner
 
-The first owner is bootstrapped once through the Firebase Console; the browser app cannot grant its own owner role.
+The first owner is bootstrapped once through the Firebase Console; the browser app cannot grant its own owner role. This is intentional: a new Google account must not be able to promote itself to owner.
 
-1. Open the deployed SyncTube website and choose **Create account** with the email you want to use as the owner.
-2. The app displays the account's Firebase UID and says access is pending.
+1. Open the deployed SyncTube website and choose **Continue with Google** (or **Create account** with email/password) using the account you want to own SyncTube.
+2. The app displays the Google account's Firebase UID and says access is pending. Google login does not bypass the invite-only approval gate.
 3. In Firebase Console → Authentication → Users, find that account and copy its UID.
 4. In Realtime Database → Data, add this object at `/members/PASTE_OWNER_UID` (replace the path segment with the actual UID):
 
@@ -67,6 +73,8 @@ The first owner is bootstrapped once through the Firebase Console; the browser a
 ```
 
 5. Sign out from SyncTube and sign in again. The owner panel should now appear.
+
+**Important:** Do not put the owner record under `/rooms`. It belongs at the root path `/members/OWNER_UID`.
 
 The owner role applies to room creation. The creator of each room becomes that room's playback host.
 
@@ -171,7 +179,7 @@ Then open `http://localhost:8000`. Add `localhost` to Firebase Authentication's 
 
 - `index.html` — shared-room-only app structure and interface
 - `styles.css` — responsive visual design and host-only controls
-- `app.js` — authentication, YouTube URL parsing, shared playlist/queue, synchronization, chat, and presence
+- `app.js` — Google and email/password authentication, YouTube URL parsing, shared playlist/queue, synchronization, chat, and presence
 - `firebase-config.js` — public Firebase configuration placeholders; no YouTube API key
 - `database.rules.json` — Realtime Database security rules
 - `firebase.json` — optional Firebase CLI rules mapping
