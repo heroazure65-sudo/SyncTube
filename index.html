@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090b1d"><meta name="description" content="Watch YouTube together, perfectly in sync.">
+  <title>SyncTube — Watch Together</title>
+  <link rel="icon" type="image/png" href="assets/synctube-logo.png"><link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div><div class="stars" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="#"><img src="assets/synctube-logo.png" alt="SyncTube logo"><span><b>Sync<span>Tube</span></b><small>Watch together. Always in sync.</small></span></a>
+    <nav><a class="active" href="#watch">Watch</a><a href="#roomPanel">Rooms</a><a href="#how">How it works</a></nav>
+    <div class="top-actions"><span id="connection" class="connection"><i></i> Connecting</span><button id="soundToggle" class="icon-btn" title="Toggle sound effects" aria-label="Toggle sound effects">♫</button><button id="createRoom" class="primary small">＋ Create room</button></div>
+  </header>
+  <main class="layout" id="watch">
+    <aside class="left-column">
+      <section class="welcome panel"><div class="orbit-logo"><div class="play-mark">▶</div><span class="orbit orbit-one"></span><span class="orbit orbit-two"></span></div><p class="eyebrow">ONE VIDEO · ONE PLAY · EVERYONE</p><h1>Watch in<br><em>perfect sync.</em></h1><p class="muted">Create a room, invite your people, and press play together.</p>
+        <div class="room-card"><div class="room-line"><span class="live-dot"></span><span>Room</span><b id="roomName">Not connected</b></div><div class="room-code"><span id="roomCode">Create or join a room</span><button id="copyInvite" class="copy-btn" title="Copy invite link">▢</button></div><div class="room-stats"><div><b id="onlineCount">—</b><small>Online*</small></div><div><b id="watchingCount">—</b><small>Watching*</small></div><div><b id="syncStatus">Ready</b><small>Sync</small></div></div></div>
+        <button id="joinRoom" class="secondary full">Join a room</button><p class="tiny muted">*Live member count requires presence setup in Firebase.</p>
+      </section>
+      <section class="features panel" id="how"><div class="feature"><span>⌁</span><div><b>Real-time sync</b><small>Shared playback state</small></div></div><div class="feature"><span>∞</span><div><b>No AI API required</b><small>No token or per-message cost</small></div></div><div class="feature"><span>◈</span><div><b>Free-tier friendly</b><small>Static hosting + Firebase</small></div></div></section>
+    </aside>
+    <section class="center-column">
+      <section class="player-panel panel"><div class="player-top"><span class="youtube-label"><i>▶</i> YouTube</span><div class="player-actions"><button id="copyVideo" class="ghost">↗ Share</button><button id="fullscreen" class="ghost" title="Fullscreen">⛶</button></div></div><div class="player-wrap"><div id="player"></div><div id="playerPlaceholder" class="player-placeholder"><div class="placeholder-icon">▶</div><b>Your shared screen</b><span>Add a YouTube link to get started</span></div><div id="syncOverlay" class="sync-overlay hidden">Syncing playback…</div></div><div class="video-info"><div><h2 id="videoTitle">No video selected</h2><p id="videoSubtitle">Paste a YouTube link below to load a video.</p></div><span class="sync-pill" id="syncPill">● Waiting</span></div></section>
+      <section class="controls panel"><div class="track"><div class="track-art">▶</div><div class="track-copy"><b id="controlTitle">Nothing playing</b><small id="controlStatus">Waiting for a video</small></div></div><div class="transport"><button id="seekBack" class="round" title="Back 10 seconds">↶</button><button id="playPause" class="play-button" title="Play or pause">▶</button><button id="seekForward" class="round" title="Forward 10 seconds">↷</button></div><div class="volume"><span>◖</span><input id="volume" type="range" min="0" max="100" value="80" aria-label="Volume"></div></section>
+      <section class="add-video panel"><div class="section-heading"><div><span class="eyebrow">SHARED PLAYER</span><h3>Choose a video</h3></div><span class="host-tag" id="hostTag">Room host only</span></div><form id="videoForm"><input id="videoUrl" type="url" placeholder="Paste a YouTube URL…" autocomplete="off" required><button class="primary" type="submit">Load video <span>→</span></button></form><p class="tiny muted">Supports youtube.com and youtu.be links. Playback is provided by the official YouTube player.</p></section>
+    </section>
+    <aside class="right-column">
+      <section class="chat-panel panel"><div class="tabs"><button class="tab active">Room chat</button><span class="chat-lock">Room updates</span></div><div class="chat-messages" id="chatMessages"><div class="system-message">Welcome to SyncTube. Create a room and share its invite link.</div></div><form id="chatForm" class="chat-form"><input id="chatInput" maxlength="240" placeholder="Chat is coming soon…" disabled><button disabled title="Chat requires a chat backend">➤</button></form></section>
+      <section class="queue-panel panel"><div class="section-heading"><div><span class="eyebrow">UP NEXT</span><h3>Room details</h3></div><span class="queue-icon">☷</span></div><div class="detail-row"><span>Room ID</span><b id="detailRoom">—</b></div><div class="detail-row"><span>Your role</span><b id="roleLabel">Not connected</b></div><div class="detail-row"><span>Playback</span><b id="playbackLabel">Idle</b></div><div class="detail-row"><span>Sync method</span><b>Scheduled start</b></div><button id="leaveRoom" class="danger-btn full" disabled>Leave room</button></section>
+      <section class="note-panel"><b>Good to know</b><p>Every viewer must tap Enable Playback once. Browsers restrict autoplay with sound. YouTube ads and regional restrictions may also differ between viewers.</p></section>
+    </aside>
+  </main>
+  <footer><span>© 2026 SyncTube</span><span>Built for shared moments <i>✦</i></span><a href="README.md">Setup guide</a></footer>
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal-card"><button id="closeModal" class="modal-close" aria-label="Close">×</button><span class="eyebrow">SYNC YOUR CREW</span><h2 id="modalTitle">Join a room</h2><p class="muted" id="modalDescription">Enter the room code shared by your host.</p><form id="roomForm"><input id="roomInput" maxlength="24" placeholder="e.g. NIGHT-STAR-42" required><button class="primary full" type="submit">Continue →</button></form><p class="tiny muted" id="modalHint">Room codes are not passwords. Only share them with people you trust.</p></div></div>
+  <div id="enableNotice" class="enable-notice"><span>Browser audio permission</span><b>Tap once to enable synced playback</b><button id="enablePlayback" class="primary">Enable Playback</button></div>
+  <script src="https://www.youtube.com/iframe_api"></script><script type="module" src="app.js"></script>
+</body></html>
