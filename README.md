@@ -1,5 +1,14 @@
 # SyncTube Pro — Firebase Configured Shared Room Edition
 
+## Migration notes for schoolfriends-dev
+
+This package has been updated to use the separate SyncTube Web App registered in the existing `schoolfriends-dev` Firebase project. The app uses the new Web App ID and the Realtime Database URL in Singapore. The existing database paths and room-code joining flow are preserved.
+
+Room access works in two stages: the global owner approves a user's Firebase UID under `/members/{uid}`, then that approved user can join a room with its six-character invitation code. Anyone who is not globally approved is denied even if they know a room code. A room host does not separately approve each participant in this version.
+
+The service worker cache is versioned as `synctube-shell-v3`; it fetches `app.js` and `firebase-config.js` from the network first to reduce stale-config problems. The PWA icon assets referenced by the manifest and service worker are included in this package.
+
+
 SyncTube is a lightweight, private YouTube watch-party website designed for GitHub Pages and Firebase. **There is only one playback mode: Watch Together.** Each room has one shared YouTube player state and one shared playlist/queue. The room host controls playback; approved members watch the same room stream, chat, and see who is online.
 
 SyncTube does not host or re-stream video. Each participant's browser loads the video directly from YouTube through the official YouTube IFrame Player API. Firebase stores only room membership, presence, chat, and compact playback state. This build does **not** use YouTube Data API search and does not need a YouTube API key.
@@ -12,7 +21,7 @@ SyncTube does not host or re-stream video. Each participant's browser loads the 
 - **Single shared playback:** There is no Personal Mode, local-only player, or separate personal playback state.
 - **Host-only transport controls:** The host can play, pause, seek, and move to the previous/next episode. The embedded YouTube controls are hidden so viewers cannot independently control playback. Some browsers may require a viewer to tap **Start synced playback** once to satisfy autoplay restrictions.
 - **Automatic synchronization:** Members follow the host's video/playlist index, playback state, and approximate playback position. Small timing differences from buffering and network latency are normal.
-- **Private rooms:** Create a room and invite approved members using its six-character code.
+- **Private rooms:** Create a room and invite approved members using its six-character code. The code is the room invitation: any globally approved SyncTube member who has the code can join; there is no separate per-room host approval step in this version.
 - **Room chat and presence:** Members can send text messages and see who is online.
 - **Owner member management:** The owner can approve Firebase Authentication UIDs.
 - **PWA install/share target:** Installable on supported browsers, with Android share integration where Web Share Target is supported.
@@ -35,19 +44,19 @@ SyncTube does not host or re-stream video. Each participant's browser loads the 
 1. A Firebase project with **Google and/or Email/Password Authentication** and **Realtime Database** enabled.
 2. A GitHub account and a public repository for GitHub Pages Free.
 
-The browser loads Firebase JavaScript SDK 13.4.0 and the official YouTube IFrame Player API from their providers' CDNs. The Firebase config is already filled for project `synctube-8888d`. No YouTube Data API key, Firebase Admin key, Node build, application server, or paid hosting is required by this version.
+The browser loads Firebase JavaScript SDK 13.4.0 and the official YouTube IFrame Player API from their providers' CDNs. The Firebase config is already filled for project `schoolfriends-dev`. No YouTube Data API key, Firebase Admin key, Node build, application server, or paid hosting is required by this version.
 
 ## 1. Firebase project already configured in this package
 
-This package is pre-filled with the Firebase Web App configuration supplied for the user's project `synctube-8888d` and its Realtime Database in `asia-southeast1`. You do not need to create another Firebase project or replace the values in `firebase-config.js`.
+This package is pre-filled with the Firebase Web App configuration supplied for the user's project `schoolfriends-dev` and its Realtime Database in `asia-southeast1`. You do not need to create another Firebase project or replace the values in `firebase-config.js`.
 
 **Before the website can sign in or read/write data, finish these console steps:**
 
-1. Open [Firebase Console](https://console.firebase.google.com/) and select project **synctube-8888d**.
+1. Open [Firebase Console](https://console.firebase.google.com/) and select project **schoolfriends-dev**.
 2. Go to **Build → Authentication → Get started → Sign-in method**. Enable **Google**, choose a support email, and save. Email/Password is optional; the Google button is the intended easy-login route.
-3. Go to **Authentication → Settings → Authorized domains**. Add your GitHub Pages host, for example `YOUR_GITHUB_USERNAME.github.io` (do not include `https://` or a path). Add `localhost` only for local development.
+3. Go to **Authentication → Settings → Authorized domains**. Add your GitHub Pages host, for example `synctube.pntr.dev` (do not include `https://` or a path). Add `localhost` only for local development.
 4. Open **Realtime Database → Rules**. Replace the editor contents with the complete contents of this package's `database.rules.json`, then press **Publish**. Keep the database in locked mode until these rules are published. Do not switch to test mode or make the database public.
-5. Confirm the Realtime Database URL shown in the console is `https://synctube-8888d-default-rtdb.asia-southeast1.firebasedatabase.app`.
+5. Confirm the Realtime Database URL shown in the console is `https://schoolfriends-dev-default-rtdb.asia-southeast1.firebasedatabase.app`.
 
 The package includes the actual browser configuration you supplied. The Firebase Web API key is not an Admin credential; it is expected to be visible in client-side code. Never publish a Firebase Admin service-account JSON, private key, database secret, or other server credential.
 
@@ -118,8 +127,8 @@ The Web Share Target API requires the PWA to be installed before it appears in t
 2. Upload the **contents** of this folder into the repository root. Make sure `index.html` is at the root, not nested inside another folder.
 3. Commit the changes to the `main` branch.
 4. In GitHub → repository **Settings → Pages**, set **Deploy from a branch**, select `main` and `/(root)`, then save.
-5. Open `https://YOUR_GITHUB_USERNAME.github.io/synctube/` after Pages deploys.
-6. In Firebase Authentication → Settings → Authorized domains, add `YOUR_GITHUB_USERNAME.github.io`.
+5. Open `https://synctube.pntr.dev/synctube/` after Pages deploys.
+6. In Firebase Authentication → Settings → Authorized domains, add `synctube.pntr.dev`.
 
 GitHub Pages Free normally requires a public repository. That means the HTML, CSS, JavaScript, and Firebase web configuration can be viewed by visitors. Firebase web config is designed to be public; Firebase Security Rules and Authentication must protect the database. Never put Admin credentials or service-account private keys in this repository.
 

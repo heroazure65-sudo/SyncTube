@@ -907,7 +907,7 @@ window.addEventListener("appinstalled", () => {
 // Initial UI state and basic keyboard conveniences.
 showGate(configReady ? "auth" : "auth");
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  navigator.serviceWorker.register("./sw.js").catch(() => { /* share-to-app requires an installable PWA; app remains usable without SW */ });
+  navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(() => { /* share-to-app requires an installable PWA; app remains usable without SW */ });
 }
 showQueueMessage("No shared playlist yet", "Create or join a room. The host can load a playlist or add videos to the room.");
 document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeRoomModal(); });

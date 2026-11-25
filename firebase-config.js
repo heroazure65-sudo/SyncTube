@@ -1,13 +1,12 @@
-// SyncTube Firebase Web App configuration.
-// These browser values are intentionally public. Protect access with Firebase Authentication
-// and the Realtime Database rules in database.rules.json. Never put Admin SDK credentials here.
+// SyncTube Web App configuration in the schoolfriends-dev Firebase project.
+// These browser values are public by design. Protect data with Authentication and Database Rules.
 export const firebaseConfig = {
-  apiKey: "AIzaSyBS39ifLHIPtt9j93kxfqqFEr7C8T8_rg",
-  authDomain: "synctube-8888d.firebaseapp.com",
-  databaseURL: "https://synctube-8888d-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "synctube-8888d",
-  storageBucket: "synctube-8888d.firebasestorage.app",
-  messagingSenderId: "884359188559",
-  appId: "1:884359188559:web:88274974d46387a9a15a3a",
-  measurementId: "G-P9Y1R1GXPR"
+  apiKey: "AIzaSyBkHqLMsR_UR_NeRaaGb-0c5MRrWzy3w6Y",
+  authDomain: "schoolfriends-dev.firebaseapp.com",
+  databaseURL: "https://schoolfriends-dev-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "schoolfriends-dev",
+  storageBucket: "schoolfriends-dev.firebasestorage.app",
+  messagingSenderId: "807033346729",
+  appId: "1:807033346729:web:72531d797a9b8f3308e7b8",
+  measurementId: "G-V8RBNKK725"
 };
