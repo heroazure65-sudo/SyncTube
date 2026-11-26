@@ -7,12 +7,12 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        // Separate package so the known-good native diagnostic can remain installed.
-        applicationId = "com.heroazure.synctube.webviewtest"
+        // Unique package keeps all diagnostic APKs installable side by side.
+        applicationId = "com.heroazure.synctube.websitetest"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
-        versionName = "0.2.0-webview-runtime-test"
+        versionName = "0.3.0-website-load-test"
     }
 
     compileOptions {
