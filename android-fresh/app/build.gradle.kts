@@ -7,12 +7,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        // Unique package keeps all diagnostic APKs installable side by side.
-        applicationId = "com.heroazure.synctube.websitetest"
+        applicationId = "com.heroazure.synctube.interactivetest"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
-        versionName = "0.3.0-website-load-test"
+        versionName = "0.4.0-interactive-test"
     }
 
     compileOptions {
