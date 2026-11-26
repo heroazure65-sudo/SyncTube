@@ -38,7 +38,6 @@ public final class MainActivity extends Activity {
         Window window = getWindow();
         window.setStatusBarColor(Color.rgb(11, 11, 18));
         window.setNavigationBarColor(Color.rgb(11, 11, 18));
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(11, 11, 18));
@@ -76,9 +75,7 @@ public final class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 String scheme = uri.getScheme();
-                return scheme == null
-                    || (!"https".equalsIgnoreCase(scheme)
-                    && !"http".equalsIgnoreCase(scheme));
+                return scheme == null || !"https".equalsIgnoreCase(scheme);
             }
 
             @Override
@@ -140,14 +137,16 @@ public final class MainActivity extends Activity {
         );
         root.addView(webView, webParams);
 
-        FrameLayout.LayoutParams progressParams = new FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            dp(3),
-            Gravity.TOP
-        );
+        if (progressBar.getParent() == null) {
+            FrameLayout.LayoutParams progressParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                dp(3),
+                Gravity.TOP
+            );
+            root.addView(progressBar, progressParams);
+        }
         progressBar.setProgress(0);
         progressBar.setVisibility(View.VISIBLE);
-        root.addView(progressBar, progressParams);
 
         if (errorPanel.getParent() == null) {
             FrameLayout.LayoutParams errorParams = new FrameLayout.LayoutParams(
