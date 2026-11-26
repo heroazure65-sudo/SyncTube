@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.heroazure.synctube",
+      "sha256_cert_fingerprints": [
+        "E2:EA:44:D4:49:C8:2D:81:42:28:99:5F:B5:86:D5:C6:FD:64:4B:AF:CE:55:53:D7:64:26:6E:7E:1D:EF:31:A9"
+      ]
+    }
+  }
+]
