@@ -41,12 +41,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          DEBUG_KEYSTORE="$HOME/.android/debug.keystore"
-          test -f "$DEBUG_KEYSTORE"
-          FINGERPRINT="$(keytool -list -v -keystore "$DEBUG_KEYSTORE" -alias androiddebugkey -storepass android 2>/dev/null | awk -F'SHA256: ' '/SHA256: / {print $2; exit}')"
-          test -n "$FINGERPRINT"
+          APK="android-app/app/build/outputs/apk/debug/app-debug.apk"
+          APKSIGNER="$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
+          test -s "$APK"
+          test -x "$APKSIGNER"
+
+          # Read the certificate from the APK itself. This avoids assuming that
+          # Gradle's debug keystore is stored at a fixed path on the runner.
+          SIGNER_INFO="$("$APKSIGNER" verify --print-certs "$APK")"
+          FINGERPRINT="$(printf '%s\n' "$SIGNER_INFO" | sed -nE 's/.*certificate SHA-256 digest: ([[:xdigit:]:]+).*/\1/p' | head -n 1)"
+          if [ -z "$FINGERPRINT" ]; then
+            printf '%s\n' "$SIGNER_INFO"
+            echo "Could not read the APK signing certificate SHA-256 fingerprint."
+            exit 1
+          fi
+
           mkdir -p android-app/preview-output
-          cp android-app/app/build/outputs/apk/debug/app-debug.apk android-app/preview-output/SyncTube-preview-debug.apk
+          cp "$APK" android-app/preview-output/SyncTube-preview-debug.apk
           cat > android-app/preview-output/assetlinks.json <<JSON
           [
             {
@@ -59,6 +70,8 @@ jobs:
             }
           ]
           JSON
+          python3 -m json.tool android-app/preview-output/assetlinks.json > /dev/null
+          echo "Generated Digital Asset Links for APK signer: $FINGERPRINT"
       - name: Upload preview APK and verification file
         uses: actions/upload-artifact@v4
         with:
