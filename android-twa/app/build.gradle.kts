@@ -5,7 +5,7 @@ android {
     namespace = "com.heroazure.synctube.twastest"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.heroazure.synctube.twafallbacktest"
+        applicationId = "com.heroazure.synctube.nativetwa"
         minSdk = 24
         targetSdk = 35
         versionCode = 2
