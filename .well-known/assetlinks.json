@@ -22,5 +22,17 @@
         "8B:74:75:07:57:B8:52:06:27:3C:7F:4C:49:AD:9A:70:33:56:87:C8:42:92:C7:E0:0C:B6:FD:41:BE:44:94:D7"
       ]
     }
+  },
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.heroazure.synctube.twafallbacktest",
+      "sha256_cert_fingerprints": [
+        "82:AA:AF:23:28:2C:29:47:2A:DF:21:E9:C7:96:EA:31:2A:E6:4D:CD:FF:58:ED:6B:92:D7:A7:82:48:D5:62:77"
+      ]
+    }
   }
 ]
