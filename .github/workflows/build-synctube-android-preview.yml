@@ -1,0 +1,68 @@
+name: Build SyncTube Android Preview APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - android/ghost-app-preview
+    paths:
+      - "android-app/**"
+      - ".github/workflows/build-synctube-android-preview.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-preview:
+    name: Build debug APK and matching Digital Asset Links file
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android SDK packages
+        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+      - name: Build preview APK
+        working-directory: android-app
+        run: gradle --no-daemon assembleDebug
+      - name: Create matching Digital Asset Links file
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEBUG_KEYSTORE="$HOME/.android/debug.keystore"
+          test -f "$DEBUG_KEYSTORE"
+          FINGERPRINT="$(keytool -list -v -keystore "$DEBUG_KEYSTORE" -alias androiddebugkey -storepass android 2>/dev/null | awk -F'SHA256: ' '/SHA256: / {print $2; exit}')"
+          test -n "$FINGERPRINT"
+          mkdir -p android-app/preview-output
+          cp android-app/app/build/outputs/apk/debug/app-debug.apk android-app/preview-output/SyncTube-preview-debug.apk
+          cat > android-app/preview-output/assetlinks.json <<JSON
+          [
+            {
+              "relation": ["delegate_permission/common.handle_all_urls"],
+              "target": {
+                "namespace": "android_app",
+                "package_name": "com.heroazure.synctube",
+                "sha256_cert_fingerprints": ["${FINGERPRINT}"]
+              }
+            }
+          ]
+          JSON
+      - name: Upload preview APK and verification file
+        uses: actions/upload-artifact@v4
+        with:
+          name: SyncTube-Android-Preview
+          path: |
+            android-app/preview-output/SyncTube-preview-debug.apk
+            android-app/preview-output/assetlinks.json
+          if-no-files-found: error
+          retention-days: 14
