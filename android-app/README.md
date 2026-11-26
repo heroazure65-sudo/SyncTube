@@ -27,3 +27,6 @@ The workflow uses a temporary GitHub runner debug key. A new run can generate a 
 ## Scope
 
 This is a preview wrapper only. It does not modify the SyncTube website or Firebase configuration. Production signing, native notifications, offline enhancements and a native Google sign-in implementation are not included.
+
+
+Build note: Android 12 splash resources are configured without AndroidX splash attributes so the project can link against the platform SDK directly.
