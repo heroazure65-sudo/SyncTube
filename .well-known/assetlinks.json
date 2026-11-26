@@ -34,5 +34,17 @@
         "E4:AA:84:2B:10:93:50:0C:C7:AF:61:63:E2:08:C6:4C:F9:23:93:52:B0:17:65:29:5B:77:07:A0:A8:5E:FD:DE"
       ]
     }
+  },
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.heroazure.synctube.nativetwa",
+      "sha256_cert_fingerprints": [
+        "EE:22:1A:D2:09:88:53:1A:B7:5D:70:22:56:A1:51:DF:70:4E:F0:0B:9E:C6:13:05:D9:2B:99:93:9A:49:99:6A"
+      ]
+    }
   }
 ]
