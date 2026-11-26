@@ -16,8 +16,8 @@ import android.widget.Toast;
 import com.google.androidbrowserhelper.trusted.LauncherActivity;
 
 public final class SplashActivity extends Activity {
-    private static final String TAG = "SyncTube";
-    private static final String WEBSITE_URL = "https://synctube.pntr.dev/";
+    private static final String TAG = "SyncTubeYouTubeTest";
+    private static final String WEBSITE_URL = "https://www.youtube.com/";
     private static final long ANIMATION_DURATION_MS = 1550L;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -29,16 +29,13 @@ public final class SplashActivity extends Activity {
 
         Intent launchIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(WEBSITE_URL));
         launchIntent.setClass(this, LauncherActivity.class);
-
-        // Android Browser Helper re-launches itself when NEW_TASK is absent.
-        // Start it in the intended task immediately to avoid the extra trampoline.
         launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
         try {
             startActivity(launchIntent);
             overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
         } catch (RuntimeException exception) {
-            android.util.Log.e(TAG, "TWA launch failed; trying Chrome directly", exception);
+            android.util.Log.e(TAG, "YouTube launch failed; trying Chrome directly", exception);
             openChromeFallback();
         }
 
@@ -67,7 +64,7 @@ public final class SplashActivity extends Activity {
             startActivity(browserIntent);
         } catch (ActivityNotFoundException exception) {
             android.util.Log.e(TAG, "Chrome fallback unavailable", exception);
-            Toast.makeText(this, "Could not open SyncTube. Please check Chrome.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Could not open YouTube. Please check Chrome.", Toast.LENGTH_LONG).show();
         }
     }
 
