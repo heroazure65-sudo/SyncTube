@@ -10,7 +10,7 @@ on:
       - ".github/workflows/build-synctube-android-preview.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-preview:
@@ -49,12 +49,14 @@ jobs:
           # Read the certificate from the APK itself. This avoids assuming that
           # Gradle's debug keystore is stored at a fixed path on the runner.
           SIGNER_INFO="$("$APKSIGNER" verify --print-certs "$APK")"
-          FINGERPRINT="$(printf '%s\n' "$SIGNER_INFO" | sed -nE 's/.*certificate SHA-256 digest: ([[:xdigit:]:]+).*/\1/p' | head -n 1)"
-          if [ -z "$FINGERPRINT" ]; then
+          FINGERPRINT_RAW="$(printf '%s\n' "$SIGNER_INFO" | sed -nE 's/.*certificate SHA-256 digest: ([[:xdigit:]:]+).*/\1/p' | head -n 1)"
+          FINGERPRINT_HEX="$(printf '%s' "$FINGERPRINT_RAW" | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+          if ! [[ "$FINGERPRINT_HEX" =~ ^[[:xdigit:]]{64}$ ]]; then
             printf '%s\n' "$SIGNER_INFO"
-            echo "Could not read the APK signing certificate SHA-256 fingerprint."
+            echo "Could not read a valid 64-character APK signing certificate SHA-256 fingerprint."
             exit 1
           fi
+          FINGERPRINT="$(printf '%s' "$FINGERPRINT_HEX" | sed 's/../&:/g; s/:$//')"
 
           mkdir -p android-app/preview-output
           cp "$APK" android-app/preview-output/SyncTube-preview-debug.apk
@@ -72,6 +74,23 @@ jobs:
           JSON
           python3 -m json.tool android-app/preview-output/assetlinks.json > /dev/null
           echo "Generated Digital Asset Links for APK signer: $FINGERPRINT"
+      - name: Publish matching Digital Asset Links to the live website
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git worktree add /tmp/synctube-main FETCH_HEAD
+          mkdir -p /tmp/synctube-main/.well-known
+          cp android-app/preview-output/assetlinks.json /tmp/synctube-main/.well-known/assetlinks.json
+          git -C /tmp/synctube-main config user.name "github-actions[bot]"
+          git -C /tmp/synctube-main config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C /tmp/synctube-main add .well-known/assetlinks.json
+          if git -C /tmp/synctube-main diff --cached --quiet; then
+            echo "The live Digital Asset Links file already matches this APK."
+          else
+            git -C /tmp/synctube-main commit -m "Update SyncTube Android app verification fingerprint"
+            git -C /tmp/synctube-main push origin HEAD:main
+          fi
       - name: Upload preview APK and verification file
         uses: actions/upload-artifact@v4
         with:
