@@ -1,10 +1,26 @@
 [
   {
-    "relation": ["delegate_permission/common.handle_all_urls"],
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
     "target": {
       "namespace": "android_app",
       "package_name": "com.heroazure.synctube",
-      "sha256_cert_fingerprints": ["11:EC:1B:70:1B:3C:D5:8A:90:42:23:55:CE:C1:B4:13:3D:3C:1C:FC:F0:BE:72:21:F5:C5:AC:05:92:CE:0D:92"]
+      "sha256_cert_fingerprints": [
+        "11:EC:1B:70:1B:3C:D5:8A:90:42:23:55:CE:C1:B4:13:3D:3C:1C:FC:F0:BE:72:21:F5:C5:AC:05:92:CE:0D:92"
+      ]
+    }
+  },
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.heroazure.synctube.twastest",
+      "sha256_cert_fingerprints": [
+        "8B:74:75:07:57:B8:52:06:27:3C:7F:4C:49:AD:9A:70:33:56:87:C8:42:92:C7:E0:0C:B6:FD:41:BE:44:94:D7"
+      ]
     }
   }
 ]
