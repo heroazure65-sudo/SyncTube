@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - android/twa-persistent-login-test
+      - android/twa-fallback-test
     paths:
       - "android-twa/**"
       - ".github/workflows/build-twa-persistent-login-test.yml"
@@ -62,14 +62,14 @@ jobs:
           FINGERPRINT="$(printf '%s' "$FINGERPRINT_HEX" | sed 's/../&:/g; s/:$//')"
           echo "TWA_SHA256_FINGERPRINT=$FINGERPRINT" >> "$GITHUB_ENV"
           mkdir -p android-twa/output
-          cp "$APK" android-twa/output/SyncTube-TWA-Session-Test.apk
+          cp "$APK" android-twa/output/SyncTube-TWA-Fallback-Test.apk
           cat > android-twa/output/assetlinks-entry.json <<JSON
           [
             {
               "relation": ["delegate_permission/common.handle_all_urls"],
               "target": {
                 "namespace": "android_app",
-                "package_name": "com.heroazure.synctube.twastest",
+                "package_name": "com.heroazure.synctube.twafallbacktest",
                 "sha256_cert_fingerprints": ["${FINGERPRINT}"]
               }
             }
@@ -99,7 +99,7 @@ jobs:
           else:
               statements = []
 
-          package_name = "com.heroazure.synctube.twastest"
+          package_name = "com.heroazure.synctube.twafallbacktest"
           fingerprint = os.environ["TWA_SHA256_FINGERPRINT"]
           statements = [
               item for item in statements
@@ -129,9 +129,9 @@ jobs:
       - name: Upload APK and verification entry
         uses: actions/upload-artifact@v4
         with:
-          name: SyncTube-TWA-Session-Test
+          name: SyncTube-TWA-Fallback-Test
           path: |
-            android-twa/output/SyncTube-TWA-Session-Test.apk
+            android-twa/output/SyncTube-TWA-Fallback-Test.apk
             android-twa/output/assetlinks-entry.json
           if-no-files-found: error
           retention-days: 14
