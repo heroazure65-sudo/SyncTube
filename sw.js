@@ -1,4 +1,4 @@
-const CACHE_NAME = "synctube-shell-v3";
+const CACHE_NAME = "synctube-shell-v4";
 const APP_FILES = [
   "./",
   "./index.html",

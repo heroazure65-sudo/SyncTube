@@ -79,7 +79,7 @@
       </div>
       <div class="sidebar-bottom">
         <div class="mini-status"><span class="live-dot"></span><span>Sync services ready</span></div>
-        <div class="user-mini"><div class="avatar" id="sidebarAvatar">S</div><div class="user-mini-copy"><strong id="sidebarName">SyncTube member</strong><small id="sidebarRole">MEMBER</small></div><button id="signOutBtn" class="icon-btn signout-btn" aria-label="Sign out" title="Sign out">↪</button></div>
+        <div class="user-mini"><div class="avatar" id="sidebarAvatar">S</div><div class="user-mini-copy"><strong id="sidebarName">SyncTube member</strong><small id="sidebarRole">MEMBER</small></div></div>
       </div>
     </aside>
 
@@ -97,6 +97,13 @@
           <div class="top-avatar" id="topAvatar">S</div><button id="topSignOutBtn" class="icon-btn top-signout" aria-label="Sign out" title="Sign out">↪</button>
         </div>
       </header>
+
+      <nav class="mobile-categories" aria-label="Quick sections">
+        <button class="category-chip active" type="button" data-scroll-target="top">For you</button>
+        <button class="category-chip" type="button" data-scroll-target="playerCard">Now playing</button>
+        <button class="category-chip" type="button" data-scroll-target="queuePanel">Playlist</button>
+        <button class="category-chip" type="button" data-scroll-target="roomPanel">Room & chat</button>
+      </nav>
 
       <div class="workspace">
         <section class="discover-column">
@@ -126,9 +133,9 @@
           <footer class="content-footer"><span>Playback is provided by YouTube's official embedded player.</span><span>SyncTube does not host or re-stream video.</span></footer>
         </section>
         <aside class="watch-column">
-          <section class="player-card">
-            <div class="player-card-head"><div><span class="eyebrow">NOW WATCHING</span><h2>Shared screen</h2></div><span id="playerStateBadge" class="state-badge"><span></span> READY</span></div>
-            <div class="player-frame">
+          <section class="player-card" id="playerCard">
+            <div class="player-card-head"><div><span class="eyebrow">NOW WATCHING</span><h2>Shared screen</h2></div><div class="player-head-actions"><button id="playerSettingsBtn" class="player-tool-btn" type="button" aria-label="Player settings" title="Player settings">⚙</button><button id="playerFullscreenBtn" class="player-tool-btn" type="button" aria-label="Fullscreen player" title="Fullscreen">⛶</button><span id="playerStateBadge" class="state-badge"><span></span> READY</span></div></div>
+            <div class="player-frame" id="playerFrame">
               <div id="player"></div>
               <div id="playerEmpty" class="player-empty"><div class="player-empty-art"><div class="orbit-ring ring-a"></div><div class="orbit-ring ring-b"></div><div class="play-glyph">▶</div></div><strong>Join a room to get started</strong><span>The host starts one shared playlist for everyone.</span></div>
               <div id="memberStartOverlay" class="member-start-overlay hidden"><strong>Ready to watch together?</strong><span>Your browser may need one tap to start the shared stream.</span><button id="enablePlaybackBtn" class="btn btn-primary btn-small" type="button">Start synced playback</button></div>
@@ -145,9 +152,9 @@
             <div id="hostNotice" class="host-notice hidden">You are watching the room's shared playlist. Only the host can load videos, change the queue, or control playback.</div>
           </section>
 
-          <section class="room-card">
+          <section class="room-card" id="roomPanel">
             <div class="room-card-head"><div><span class="eyebrow">YOUR WATCH PARTY</span><h2 id="roomTitle">No room active</h2></div><span id="roomStatus" class="room-status"><i></i> OFFLINE</span></div>
-            <div class="room-empty" id="roomEmpty"><p>Create or join a private room. The host chooses what plays; everyone else follows along.</p><div class="room-empty-actions"><button id="roomCreateInline" class="btn btn-primary">＋ Create room</button><button id="roomJoinInline" class="btn btn-outline">Join with code</button></div></div>
+            <div class="room-empty" id="roomEmpty"><p>Create or join a private room. The host chooses what plays; everyone else follows along.</p><div class="room-empty-actions"><button id="roomJoinInline" class="btn btn-outline btn-small" type="button">Join with code</button></div></div>
             <div id="roomActive" class="hidden">
               <div class="room-code-row"><div><span class="eyebrow">ROOM INVITE CODE</span><strong id="roomCodeDisplay">------</strong></div><button id="copyRoomCodeBtn" class="btn btn-outline btn-small">Copy code</button></div>
               <div class="room-metrics"><div><strong id="onlineCount">1</strong><span>online now</span></div><div><strong id="memberCount">1</strong><span>room members</span></div><div><strong id="roomRoleValue">—</strong><span>your role</span></div></div>
@@ -157,7 +164,7 @@
                 <div id="chatMessages" class="chat-messages"><div class="chat-placeholder">Say hello to the room.</div></div>
                 <form id="chatForm" class="chat-form"><input id="chatInput" type="text" maxlength="240" placeholder="Message the room…" autocomplete="off" aria-label="Message the room"><button type="submit" aria-label="Send message">↑</button></form>
               </div>
-              <div class="room-foot"><button id="leaveRoomBtn" class="text-button">Leave room</button><span>Invite-only · Room code required</span></div>
+              <div class="room-foot"><button id="leaveRoomBtn" class="text-button">Leave room</button><span>Invite-only · Invite code required</span></div>
             </div>
           </section>
 
@@ -173,9 +180,39 @@
     </main>
   </div>
 
+  <nav class="mobile-bottom-nav" aria-label="Main navigation">
+    <button class="bottom-nav-item active" type="button" data-scroll-target="top"><span>⌂</span><small>Home</small></button>
+    <button class="bottom-nav-item" type="button" data-scroll-target="queuePanel"><span>♫</span><small>Playlist</small></button>
+    <button class="bottom-nav-create" id="mobileCreateRoomBtn" type="button" aria-label="Create a room">＋</button>
+    <button class="bottom-nav-item" type="button" data-scroll-target="roomPanel"><span>▣</span><small>Room</small></button>
+    <button class="bottom-nav-item" type="button" id="mobileProfileBtn"><span>●</span><small>You</small></button>
+  </nav>
+
+  <div id="playerSettingsSheet" class="settings-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="playerSettingsTitle">
+    <section class="settings-sheet">
+      <div class="sheet-grabber" aria-hidden="true"></div>
+      <div class="settings-sheet-head"><h2 id="playerSettingsTitle">Player settings</h2><button id="closePlayerSettingsBtn" class="sheet-close" type="button" aria-label="Close settings">×</button></div>
+      <div class="settings-row"><span><strong>Shared playback</strong><small>Everyone follows the host's playback position.</small></span><b class="settings-state">SYNCED</b></div>
+      <div class="settings-row"><span><strong>Playback controls</strong><small id="settingsHostHint">The room host controls play, pause and seeking.</small></span><span class="settings-value">Room-wide</span></div>
+      <div class="settings-row"><span><strong>Quality, captions & speed</strong><small>These options are controlled by YouTube and may not be available inside the embedded player.</small></span><span class="settings-value">YouTube</span></div>
+      <p class="settings-footnote">Use the open-on-YouTube arrow beneath the player to access YouTube directly when supported.</p>
+    </section>
+  </div>
+
+  <div id="accountSheet" class="settings-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="accountSheetTitle">
+    <section class="settings-sheet account-sheet">
+      <div class="sheet-grabber" aria-hidden="true"></div>
+      <div class="settings-sheet-head"><h2 id="accountSheetTitle">Your account</h2><button id="closeAccountSheetBtn" class="sheet-close" type="button" aria-label="Close account">×</button></div>
+      <div class="account-identity"><div class="account-avatar" aria-hidden="true">●</div><div><strong id="accountDisplayName">Member</strong><small id="accountEmail">Signed-in account</small></div></div>
+      <div class="settings-row"><span><strong>Membership</strong><small>Access level for this SyncTube account.</small></span><span id="accountRole" class="settings-value">Member</span></div>
+      <div class="settings-row account-uid-row"><span><strong>Firebase UID</strong><small id="accountUid" class="account-uid">Unavailable</small></span><button id="accountCopyUidBtn" class="btn btn-outline btn-small" type="button">Copy</button></div>
+      <button id="accountSignOutBtn" class="settings-youtube-btn" type="button">Sign out</button>
+    </section>
+  </div>
+
   <div id="roomModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="roomModalTitle">
     <div class="modal-card"><button class="modal-close" data-close-modal aria-label="Close">×</button><span class="eyebrow">PRIVATE WATCH PARTY</span><h2 id="roomModalTitle">Create your room</h2><p id="roomModalCopy">Give your room a name your friends will recognise.</p>
-      <form id="roomModalForm"><label class="field-wrap" id="roomNameWrap">Room name<input id="roomNameInput" type="text" maxlength="40" value="The Watch Lounge" placeholder="Friday night crew"></label><label class="field-wrap hidden" id="roomCodeWrap">Invite code<input id="roomCodeInput" type="text" maxlength="6" autocapitalize="characters" placeholder="ABC123"></label><button id="roomModalSubmit" class="btn btn-primary btn-wide" type="submit">Create room <span>↗</span></button></form><p id="roomModalMessage" class="form-message" role="status"></p>
+      <form id="roomModalForm"><label class="field-wrap" id="roomNameWrap">Room name<input id="roomNameInput" type="text" maxlength="40" value="The Watch Lounge" placeholder="Friday night crew"></label><label class="field-wrap hidden" id="roomCodeWrap">Invite code<input id="roomCodeInput" type="text" maxlength="8" autocapitalize="characters" inputmode="text" placeholder="ABCD1234"></label><button id="roomModalSubmit" class="btn btn-primary btn-wide" type="submit">Create room <span>↗</span></button></form><p id="roomModalMessage" class="form-message" role="status"></p>
     </div>
   </div>
 

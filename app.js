@@ -18,6 +18,8 @@ let app = null, auth = null, db = null, currentUser = null, memberProfile = null
 let isOwner = false, activeRoomCode = null, roomMeta = null, sharedPlayback = null;
 let pendingIncomingShare = null, currentVideoId = "", currentVideoMeta = null, currentPlaylistId = "", currentQueueIds = [], currentPlaylistIndex = 0, ytPlayer = null, playerReady = false;
 let roomUnsubs = [], ownerMembersUnsub = null, serverTimeOffset = 0, lastPublishAt = 0;
+let activePresenceRef = null, activePresenceRoomCode = null, roomActionBusy = false, lastChatSentAt = 0;
+let settingsReturnFocus = null, accountReturnFocus = null;
 let toastTimer = null, authMode = "signin";
 
 function toast(message) {
@@ -38,6 +40,7 @@ function initials(value) {
   return name.split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "S";
 }
 function escapeText(value) { return String(value ?? ""); }
+function boundedText(value, maxLength, fallback) { return String(value ?? "").trim().slice(0, maxLength) || fallback; }
 function showGate(which) {
   $("#authGate").classList.toggle("hidden", which !== "auth");
   $("#pendingGate").classList.toggle("hidden", which !== "pending");
@@ -54,7 +57,7 @@ function formatTime(timestamp) {
   if (Number.isNaN(date.getTime())) return "now";
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
-function userName() { return memberProfile?.displayName || currentUser?.displayName || currentUser?.email?.split("@")[0] || "Member"; }
+function userName() { return String(memberProfile?.displayName || currentUser?.displayName || currentUser?.email?.split("@")[0] || "Member").trim().slice(0, 32) || "Member"; }
 function activeMember() { return Boolean(currentUser && memberProfile?.active === true); }
 function roomIsHost() { return Boolean(activeRoomCode && roomMeta?.ownerUid === currentUser?.uid); }
 function safeVideoId(value) { return /^[A-Za-z0-9_-]{11}$/.test(value || "") ? value : ""; }
@@ -187,8 +190,12 @@ $("#googleSignInBtn").addEventListener("click", async () => {
   } finally { setBusy(button, false); }
 });
 $("#pendingSignOut").addEventListener("click", () => auth && signOut(auth));
-$("#signOutBtn").addEventListener("click", () => auth && signOut(auth));
-$("#topSignOutBtn").addEventListener("click", () => auth && signOut(auth));
+async function handleSignOut() {
+  if (!auth) return;
+  if (activeRoomCode) await leaveRoom(false);
+  await signOut(auth);
+}
+$("#topSignOutBtn").addEventListener("click", handleSignOut);
 $("#copyUidBtn").addEventListener("click", async () => {
   const uid = currentUser?.uid || $("#pendingUid").textContent;
   try { await navigator.clipboard.writeText(uid); toast("Firebase UID copied"); }
@@ -201,6 +208,7 @@ if (auth) onAuthStateChanged(auth, async (user) => {
     cleanupRoomListeners();
     if (ownerMembersUnsub) { ownerMembersUnsub(); ownerMembersUnsub = null; }
     activeRoomCode = null; roomMeta = null; sharedPlayback = null; memberProfile = null;
+    activePresenceRef = null; activePresenceRoomCode = null; isOwner = false; latestParticipants = {}; latestPresence = {};
     showGate("auth");
     return;
   }
@@ -216,14 +224,14 @@ if (auth) onAuthStateChanged(auth, async (user) => {
     }
     isOwner = memberProfile.role === "owner";
     memberProfile.displayName = memberProfile.displayName || user.displayName || user.email?.split("@")[0] || "Member";
-    openApp();
+    await openApp();
   } catch (error) {
     setMessage("#pendingMessage", `Could not check membership: ${error.message}. Verify your Realtime Database rules.`, "error");
     showGate("pending");
   }
 });
 
-function openApp() {
+async function openApp() {
   showGate("app");
   const name = userName();
   $("#sidebarName").textContent = name;
@@ -234,6 +242,9 @@ function openApp() {
   if (isOwner) listenOwnerMembers();
   loadYouTubeApi();
   updateHostControls();
+  setRoomControlsBusy(true);
+  try { await restoreSavedRoom(); }
+  finally { setRoomControlsBusy(false); }
   processIncomingShare();
 }
 
@@ -516,7 +527,7 @@ function setSharedVideo(video) {
   const id = safeVideoId(video.videoId);
   if (!id) return toast("That video ID is not valid");
   currentPlaylistId = ""; currentQueueIds = []; currentPlaylistIndex = 0;
-  const payload = { videoId: id, videoTitle: video.title || "Shared room video", channelTitle: video.channel || "YouTube", playlistId: "", queueIds: "", playlistIndex: 0, state: "playing", positionSec: 0, updatedAt: serverTimestamp(), updatedBy: currentUser.uid };
+  const payload = { videoId: id, videoTitle: boundedText(video.title, 150, "Shared room video"), channelTitle: boundedText(video.channel, 100, "YouTube"), playlistId: "", queueIds: "", playlistIndex: 0, state: "playing", positionSec: 0, updatedAt: serverTimestamp(), updatedBy: currentUser.uid };
   set(ref(db, `rooms/${activeRoomCode}/playback`), payload).then(() => {
     sharedPlayback = { ...payload, updatedAt: Date.now() + serverTimeOffset };
     currentVideoId = id;
@@ -530,7 +541,7 @@ function setSharedPlaylist(playlist) {
   const id = safePlaylistId(playlist.playlistId);
   if (!id) return toast("That YouTube playlist link is not valid");
   currentPlaylistId = id; currentQueueIds = []; currentPlaylistIndex = 0; currentVideoId = "";
-  const payload = { videoId: "", videoTitle: playlist.title || "Shared YouTube playlist", channelTitle: "YouTube playlist", playlistId: id, queueIds: "", playlistIndex: 0, state: "playing", positionSec: 0, updatedAt: serverTimestamp(), updatedBy: currentUser.uid };
+  const payload = { videoId: "", videoTitle: boundedText(playlist.title, 150, "Shared YouTube playlist"), channelTitle: "YouTube playlist", playlistId: id, queueIds: "", playlistIndex: 0, state: "playing", positionSec: 0, updatedAt: serverTimestamp(), updatedBy: currentUser.uid };
   set(ref(db, `rooms/${activeRoomCode}/playback`), payload).then(() => {
     sharedPlayback = { ...payload, updatedAt: Date.now() + serverTimeOffset };
     updateNowPlaying({ title: playlist.title || "Shared YouTube playlist", channel: "Loading episodes from YouTube" });
@@ -547,7 +558,7 @@ function setSharedQueue(queue) {
   const positionSec = Math.max(0, Number(queue.positionSec) || 0);
   const playbackState = queue.state === "paused" ? "paused" : "playing";
   currentPlaylistId = ""; currentQueueIds = ids; currentPlaylistIndex = playlistIndex; currentVideoId = "";
-  const payload = { videoId: "", videoTitle: queue.title || "Shared custom queue", channelTitle: "SyncTube playlist", playlistId: "", queueIds: ids.join(","), playlistIndex, state: playbackState, positionSec, updatedAt: serverTimestamp(), updatedBy: currentUser.uid };
+  const payload = { videoId: "", videoTitle: boundedText(queue.title, 150, "Shared custom queue"), channelTitle: "SyncTube playlist", playlistId: "", queueIds: ids.join(","), playlistIndex, state: playbackState, positionSec, updatedAt: serverTimestamp(), updatedBy: currentUser.uid };
   set(ref(db, `rooms/${activeRoomCode}/playback`), payload).then(() => {
     sharedPlayback = { ...payload, updatedAt: Date.now() + serverTimeOffset };
     updateNowPlaying({ title: queue.title || "Shared custom queue", channel: `${ids.length} videos · shared queue` });
@@ -580,7 +591,7 @@ function publishPlayback(state, positionSec) {
   if (!activeRoomCode || !roomIsHost() || (!currentVideoId && !currentPlaylistId && !currentQueueIds.length)) return;
   if (Date.now() - lastPublishAt < 450 && state === "playing") return;
   lastPublishAt = Date.now();
-  const payload = { videoId: currentVideoId || "", videoTitle: currentVideoMeta?.title || (currentPlaylistId ? "YouTube playlist" : currentQueueIds.length ? "Custom video queue" : "Shared room video"), channelTitle: currentVideoMeta?.channel || "YouTube", playlistId: currentPlaylistId || "", queueIds: currentQueueIds.join(","), playlistIndex: hasActivePlaylist() ? Math.max(0, currentPlaylistIndex) : 0, state, positionSec: Math.max(0, Number(positionSec) || 0), updatedAt: serverTimestamp(), updatedBy: currentUser.uid };
+  const payload = { videoId: currentVideoId || "", videoTitle: boundedText(currentVideoMeta?.title || (currentPlaylistId ? "YouTube playlist" : currentQueueIds.length ? "Custom video queue" : "Shared room video"), 150, "Shared room video"), channelTitle: boundedText(currentVideoMeta?.channel || "YouTube", 100, "YouTube"), playlistId: currentPlaylistId || "", queueIds: currentQueueIds.join(","), playlistIndex: hasActivePlaylist() ? Math.max(0, currentPlaylistIndex) : 0, state, positionSec: Math.max(0, Number(positionSec) || 0), updatedAt: serverTimestamp(), updatedBy: currentUser.uid };
   set(ref(db, `rooms/${activeRoomCode}/playback`), payload).catch((error) => toast(`Sync update failed: ${error.message}`));
 }
 function applyRemotePlayback(playback) {
@@ -652,96 +663,53 @@ $("#openOnYoutubeBtn").addEventListener("click", () => {
 });
 
 // Rooms, shared playback, presence and chat.
+function roomStorageKey(uid = currentUser?.uid) { return uid ? `synctube:last-room:${uid}` : ""; }
+function saveLastRoom(code) {
+  // sessionStorage survives reloads but is isolated per browser tab. This prevents
+  // two tabs signed in as the same user from overwriting each other's room state.
+  try { const key = roomStorageKey(); if (key) sessionStorage.setItem(key, code); } catch { /* storage may be unavailable */ }
+}
+function clearLastRoom() {
+  try { const key = roomStorageKey(); if (key) sessionStorage.removeItem(key); } catch { /* storage may be unavailable */ }
+}
+function setRoomControlsBusy(busy) {
+  ["#createRoomBtn", "#joinRoomBtn", "#roomJoinInline", "#mobileCreateRoomBtn", "#leaveRoomBtn", "#topSignOutBtn", "#accountSignOutBtn"].forEach((selector) => {
+    const button = $(selector);
+    if (button) button.disabled = Boolean(busy);
+  });
+}
+async function restoreSavedRoom() {
+  if (!activeMember() || activeRoomCode || roomActionBusy) return;
+  let savedCode = "";
+  try { savedCode = sessionStorage.getItem(roomStorageKey()) || ""; } catch { return; }
+  if (!/^(?:[A-Z0-9]{6}|[A-Z0-9]{8})$/.test(savedCode)) {
+    if (savedCode) clearLastRoom();
+    return;
+  }
+  try {
+    await joinRoom(savedCode);
+  } catch (error) {
+    // Retain the code for temporary network/rules errors; clear only when the room is gone.
+    if (/room not found|no longer exists/i.test(error.message || "")) clearLastRoom();
+    else toast(`Couldn't reconnect to ${savedCode}: ${error.message || "Check your connection."}`);
+  }
+}
 function makeRoomCode() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const bytes = new Uint8Array(6); crypto.getRandomValues(bytes);
-  return [...bytes].map((byte) => alphabet[byte % alphabet.length]).join("");
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 32 symbols; each character carries 5 random bits.
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((byte) => alphabet[byte & 31]).join("");
 }
 function cleanupRoomListeners() {
   roomUnsubs.forEach((unsubscribe) => { try { unsubscribe(); } catch { /* no-op */ } });
   roomUnsubs = [];
 }
-async function createRoom(name) {
-  if (!activeMember()) throw new Error("Your account is not approved.");
-  if (activeRoomCode) await leaveRoom(false);
-  let code = "";
-  for (let attempt = 0; attempt < 5; attempt++) {
-    code = makeRoomCode();
-    const existing = await get(ref(db, `rooms/${code}/meta`));
-    if (!existing.exists()) break;
-    code = "";
-  }
-  if (!code) throw new Error("Could not reserve a room code. Try again.");
-  await set(ref(db, `rooms/${code}/meta`), { ownerUid: currentUser.uid, name: name || "The Watch Lounge", createdAt: serverTimestamp() });
-  await set(ref(db, `rooms/${code}/participants/${currentUser.uid}`), true);
-  await set(ref(db, `rooms/${code}/playback`), { videoId: "", videoTitle: "", channelTitle: "", playlistId: "", queueIds: "", playlistIndex: 0, state: "paused", positionSec: 0, updatedAt: serverTimestamp(), updatedBy: currentUser.uid });
-  await enterRoom(code);
-}
-async function joinRoom(codeValue) {
-  if (!activeMember()) throw new Error("Your account is not approved.");
-  const code = String(codeValue || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (!/^[A-Z0-9]{6}$/.test(code)) throw new Error("Enter the 6-character room code.");
-  const metaSnap = await get(ref(db, `rooms/${code}/meta`));
-  if (!metaSnap.exists()) throw new Error("Room not found. Check the code with your friend.");
-  await set(ref(db, `rooms/${code}/participants/${currentUser.uid}`), true);
-  await enterRoom(code);
-}
-async function enterRoom(code) {
-  cleanupRoomListeners();
-  activeRoomCode = code;
-  sharedPlayback = null;
-  const base = `rooms/${code}`;
-  const metaSnap = await get(ref(db, `${base}/meta`));
-  roomMeta = metaSnap.val() || null;
-  if (!roomMeta) throw new Error("This room no longer exists.");
-  const presenceRef = ref(db, `${base}/presence/${currentUser.uid}`);
-  await set(presenceRef, { name: userName(), online: true, seenAt: serverTimestamp() });
-  await onDisconnect(presenceRef).remove();
-  roomUnsubs.push(onValue(ref(db, `${base}/meta`), (snap) => {
-    roomMeta = snap.val() || null;
-    renderRoomMeta();
-  }));
-  // Wait for the listener's initial snapshot before processing a share intent. This
-  // prevents a shared episode from replacing a queue before the existing room queue loads.
-  await new Promise((resolve, reject) => {
-    let initialSnapshot = true;
-    const unsubscribe = onValue(ref(db, `${base}/playback`), (snap) => {
-      sharedPlayback = snap.val() || null;
-      if (hasPlaylistPlayback(sharedPlayback)) applyRemotePlayback(sharedPlayback);
-      else if (playerReady) {
-        showPlayerEmpty(true);
-        $("#playingTitle").textContent = "Waiting for the host";
-        $("#playingChannel").textContent = "The host has not started a video yet";
-        $("#playingModeLabel").textContent = "SHARED ROOM PLAYBACK";
-        showQueueMessage("No shared playlist yet", roomIsHost() ? "Load a YouTube playlist or add videos to the room." : "The host has not added a playlist yet.");
-      }
-      if (initialSnapshot) { initialSnapshot = false; resolve(); }
-    }, (error) => reject(error));
-    roomUnsubs.push(unsubscribe);
-  });
-  roomUnsubs.push(onValue(ref(db, `${base}/participants`), (snap) => renderParticipants(snap.val() || {})));
-  roomUnsubs.push(onValue(ref(db, `${base}/presence`), (snap) => renderPresence(snap.val() || {})));
-  roomUnsubs.push(onValue(query(ref(db, `${base}/chat`), limitToLast(35)), (snap) => renderChat(snap.val() || {})));
-  renderRoomMeta();
-  updateHostControls();
-  $("#roomEmpty").classList.add("hidden");
-  $("#roomActive").classList.remove("hidden");
-  $("#roomChip").classList.add("active");
-  $("#roomChipText").textContent = `Room ${code}`;
-  $("#roomStatus").classList.add("active");
-  $("#roomStatus").innerHTML = "<i></i> LIVE";
-  if (playerReady && hasPlaylistPlayback(sharedPlayback)) applyRemotePlayback(sharedPlayback);
-  importIncomingShare();
-  toast(`Joined room ${code}`);
-}
-async function leaveRoom(showToast = true) {
-  if (!activeRoomCode) return;
-  const oldCode = activeRoomCode;
-  cleanupRoomListeners();
-  try { await remove(ref(db, `rooms/${oldCode}/presence/${currentUser.uid}`)); } catch { /* onDisconnect also clears presence */ }
+function resetRoomUi() {
   activeRoomCode = null; roomMeta = null; sharedPlayback = null;
+  activePresenceRef = null; activePresenceRoomCode = null;
+  latestParticipants = {}; latestPresence = {};
   currentPlaylistId = ""; currentQueueIds = []; currentPlaylistIndex = 0; currentVideoId = ""; currentVideoMeta = null;
-  if (playerReady && ytPlayer) ytPlayer.stopVideo();
+  if (playerReady && ytPlayer) { try { ytPlayer.stopVideo(); } catch { /* player may already be unavailable */ } }
   showPlayerEmpty(true);
   $("#playingTitle").textContent = "Join a room to get started";
   $("#playingChannel").textContent = "The host starts one shared playlist for everyone";
@@ -754,9 +722,207 @@ async function leaveRoom(showToast = true) {
   $("#roomStatus").classList.remove("active");
   $("#roomStatus").innerHTML = "<i></i> OFFLINE";
   $("#roomRoleValue").textContent = "—";
+  $("#onlineCount").textContent = "0";
+  $("#memberCount").textContent = "0";
+  $("#roomPeople").replaceChildren();
+  $("#chatMessages").replaceChildren();
   updateHostControls();
   showQueueMessage("No shared playlist yet", "Create or join a room to start watching together.");
-  if (showToast) toast(`Left room ${oldCode}`);
+}
+async function removePresenceSession(code) {
+  if (!activePresenceRef || activePresenceRoomCode !== code) return;
+  const presenceRef = activePresenceRef;
+  try { await onDisconnect(presenceRef).cancel(); } catch { /* connection may already be closing */ }
+  try { await remove(presenceRef); } catch { /* onDisconnect is the fallback */ }
+  activePresenceRef = null;
+  activePresenceRoomCode = null;
+}
+function handleRoomListenerError(code, error) {
+  console.warn("SyncTube room listener error", error);
+  if (activeRoomCode !== code) return;
+  if (String(error?.code || "").toUpperCase().includes("PERMISSION_DENIED")) {
+    clearLastRoom();
+    cleanupRoomListeners();
+    void removePresenceSession(code).finally(async () => {
+      try { await remove(ref(db, `rooms/${code}/participants/${currentUser.uid}`)); } catch { /* access may already be revoked */ }
+      if (activeRoomCode === code) resetRoomUi();
+      toast("Your access to this room has ended. Ask the host for a new invite if needed.");
+    });
+  } else {
+    toast(`Room connection issue: ${error?.message || "Check your connection."}`);
+  }
+}
+async function enterRoom(code) {
+  cleanupRoomListeners();
+  sharedPlayback = null;
+  const base = `rooms/${code}`;
+  const metaSnap = await get(ref(db, `${base}/meta`));
+  const nextRoomMeta = metaSnap.val() || null;
+  if (!nextRoomMeta) throw new Error("This room no longer exists.");
+
+  // A separate presence session per tab prevents one tab's disconnect from marking
+  // another open tab as offline.
+  const sessionKey = push(ref(db, `${base}/presence/${currentUser.uid}`)).key;
+  if (!sessionKey) throw new Error("Could not create a presence session. Try again.");
+  const presenceRef = ref(db, `${base}/presence/${currentUser.uid}/${sessionKey}`);
+  activePresenceRef = presenceRef;
+  activePresenceRoomCode = code;
+  // Register disconnect cleanup before publishing this session as online.
+  await onDisconnect(presenceRef).remove();
+  await set(presenceRef, { name: userName(), online: true, seenAt: serverTimestamp() });
+
+  activeRoomCode = code;
+  roomMeta = nextRoomMeta;
+  roomUnsubs.push(onValue(ref(db, `${base}/meta`), (snap) => {
+    roomMeta = snap.val() || null;
+    renderRoomMeta();
+  }, (error) => handleRoomListenerError(code, error)));
+
+  // Wait for the first playback snapshot so a shared-link import cannot overwrite the queue mid-load.
+  await new Promise((resolve, reject) => {
+    let initialSnapshot = true;
+    let timeoutId = window.setTimeout(() => {
+      unsubscribe();
+      reject(new Error("Timed out while loading room playback. Check your connection and retry."));
+    }, 15000);
+    const unsubscribe = onValue(ref(db, `${base}/playback`), (snap) => {
+      sharedPlayback = snap.val() || null;
+      if (hasPlaylistPlayback(sharedPlayback)) applyRemotePlayback(sharedPlayback);
+      else if (playerReady) {
+        showPlayerEmpty(true);
+        $("#playingTitle").textContent = "Waiting for the host";
+        $("#playingChannel").textContent = "The host has not started a video yet";
+        $("#playingModeLabel").textContent = "SHARED ROOM PLAYBACK";
+        showQueueMessage("No shared playlist yet", roomIsHost() ? "Load a YouTube playlist or add videos to the room." : "The host has not added a playlist yet.");
+      }
+      if (initialSnapshot) {
+        initialSnapshot = false;
+        window.clearTimeout(timeoutId);
+        resolve();
+      }
+    }, (error) => {
+      window.clearTimeout(timeoutId);
+      reject(error);
+    });
+    roomUnsubs.push(unsubscribe);
+  });
+  roomUnsubs.push(onValue(ref(db, `${base}/participants`), (snap) => renderParticipants(snap.val() || {}), (error) => handleRoomListenerError(code, error)));
+  roomUnsubs.push(onValue(ref(db, `${base}/presence`), (snap) => renderPresence(snap.val() || {}), (error) => handleRoomListenerError(code, error)));
+  roomUnsubs.push(onValue(query(ref(db, `${base}/chat`), limitToLast(35)), (snap) => renderChat(snap.val() || {}), (error) => handleRoomListenerError(code, error)));
+  renderRoomMeta();
+  updateHostControls();
+  $("#roomEmpty").classList.add("hidden");
+  $("#roomActive").classList.remove("hidden");
+  $("#roomChip").classList.add("active");
+  $("#roomChipText").textContent = `Room ${code}`;
+  $("#roomStatus").classList.add("active");
+  $("#roomStatus").innerHTML = "<i></i> LIVE";
+  if (playerReady && hasPlaylistPlayback(sharedPlayback)) applyRemotePlayback(sharedPlayback);
+  saveLastRoom(code);
+  importIncomingShare();
+  toast(`Joined room ${code}`);
+}
+async function createRoom(name) {
+  if (!activeMember()) throw new Error("Your account is not approved.");
+  if (roomActionBusy) throw new Error("A room action is already in progress. Please wait.");
+  roomActionBusy = true; setRoomControlsBusy(true);
+  let code = "", metaCreated = false, participantAdded = false;
+  try {
+    if (activeRoomCode) await leaveRoom(false);
+    for (let attempt = 0; attempt < 8; attempt++) {
+      code = makeRoomCode();
+      const existing = await get(ref(db, `rooms/${code}/meta`));
+      if (!existing.exists()) break;
+      code = "";
+    }
+    if (!code) throw new Error("Could not reserve a room code. Try again.");
+    const safeRoomName = String(name || "The Watch Lounge").trim().slice(0, 40) || "The Watch Lounge";
+    await set(ref(db, `rooms/${code}/meta`), { ownerUid: currentUser.uid, name: safeRoomName, createdAt: serverTimestamp() });
+    metaCreated = true;
+    await set(ref(db, `rooms/${code}/participants/${currentUser.uid}`), true);
+    participantAdded = true;
+    await set(ref(db, `rooms/${code}/playback`), { videoId: "", videoTitle: "", channelTitle: "", playlistId: "", queueIds: "", playlistIndex: 0, state: "paused", positionSec: 0, updatedAt: serverTimestamp(), updatedBy: currentUser.uid });
+    await enterRoom(code);
+  } catch (error) {
+    if (code) {
+      cleanupRoomListeners();
+      await removePresenceSession(code);
+      if (metaCreated) {
+        // Playback deletion is owner-only and also requires the host to remain a
+        // participant, so remove it before removing the participant record.
+        try { await remove(ref(db, `rooms/${code}/playback`)); } catch { /* playback may not have been created */ }
+      }
+      if (participantAdded) { try { await remove(ref(db, `rooms/${code}/participants/${currentUser.uid}`)); } catch { /* report original failure */ } }
+      if (metaCreated) {
+        try { await remove(ref(db, `rooms/${code}/meta`)); } catch { /* owner cleanup may be blocked by stale rules */ }
+      }
+      if (activeRoomCode === code) resetRoomUi();
+    }
+    throw error;
+  } finally {
+    roomActionBusy = false; setRoomControlsBusy(false);
+  }
+}
+async function joinRoom(codeValue) {
+  if (!activeMember()) throw new Error("Your account is not approved.");
+  if (roomActionBusy) throw new Error("A room action is already in progress. Please wait.");
+  const code = String(codeValue || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!/^(?:[A-Z0-9]{6}|[A-Z0-9]{8})$/.test(code)) throw new Error("Enter a valid 6- or 8-character room code.");
+  roomActionBusy = true; setRoomControlsBusy(true);
+  let participantAdded = false;
+  try {
+    const metaSnap = await get(ref(db, `rooms/${code}/meta`));
+    if (!metaSnap.exists()) throw new Error("Room not found. Check the code with your friend.");
+    if (activeRoomCode === code) { toast(`You're already in room ${code}`); return; }
+    if (activeRoomCode) await leaveRoom(false);
+    await set(ref(db, `rooms/${code}/participants/${currentUser.uid}`), true);
+    participantAdded = true;
+    await enterRoom(code);
+  } catch (error) {
+    // Do not tear down listeners for an already-active room when validation of a different
+    // target room fails before the current room has been left.
+    if (activeRoomCode === code) cleanupRoomListeners();
+    await removePresenceSession(code);
+    if (participantAdded) {
+      try { await remove(ref(db, `rooms/${code}/participants/${currentUser.uid}`)); }
+      catch { /* New database rules allow members to remove their own participant record. */ }
+    }
+    if (activeRoomCode === code) resetRoomUi();
+    throw error;
+  } finally {
+    roomActionBusy = false; setRoomControlsBusy(false);
+  }
+}
+async function leaveRoom(showToast = true) {
+  if (!activeRoomCode) return;
+  const oldCode = activeRoomCode;
+  clearLastRoom();
+  cleanupRoomListeners();
+  await removePresenceSession(oldCode);
+  let membershipRemoved = true;
+  let anotherTabIsPresent = false;
+  try {
+    // The participant record is shared by all tabs signed in as this UID.
+    // Preserve it while another tab still has an online presence session.
+    const sessionsSnap = await get(ref(db, `rooms/${oldCode}/presence/${currentUser.uid}`));
+    const sessions = sessionsSnap.val();
+    if (sessions && typeof sessions === "object") {
+      if (sessions.online === true) anotherTabIsPresent = true; // older client session shape
+      else anotherTabIsPresent = Object.values(sessions).some((session) => session && typeof session === "object" && session.online === true);
+    }
+  } catch (error) {
+    membershipRemoved = false;
+    console.warn("Could not check other tab sessions; keeping room membership to avoid disconnecting another tab.", error);
+  }
+  if (membershipRemoved && !anotherTabIsPresent) {
+    try { await remove(ref(db, `rooms/${oldCode}/participants/${currentUser.uid}`)); }
+    catch (error) { membershipRemoved = false; console.warn("Could not revoke participant record; publish the included database rules.", error); }
+  }
+  resetRoomUi();
+  if (showToast) {
+    if (anotherTabIsPresent) toast(`Closed this tab. Another tab is still in room ${oldCode}.`);
+    else toast(membershipRemoved ? `Left room ${oldCode}` : `Left locally. Room membership was kept because its status could not be verified.`);
+  }
 }
 function renderRoomMeta() {
   if (!activeRoomCode) return;
@@ -773,11 +939,23 @@ function renderParticipants(participants) {
   latestParticipants = participants || {};
   const count = Object.keys(latestParticipants).length;
   $("#memberCount").textContent = String(count);
+  $("#onlineCount").textContent = String(Object.keys(latestParticipants).filter((uid) => presenceSessions(uid).some((session) => session.online === true)).length);
   renderPeople();
+}
+function presenceSessions(uid) {
+  const value = latestPresence[uid];
+  if (!value) return [];
+  // Support old presence/{uid} records while new clients use presence/{uid}/{sessionId}.
+  if (typeof value === "object" && typeof value.online === "boolean") return [value];
+  return Object.values(value).filter((session) => session && typeof session === "object");
+}
+function bestPresence(uid) {
+  return presenceSessions(uid).sort((a, b) => Number(b.seenAt || 0) - Number(a.seenAt || 0))[0] || null;
 }
 function renderPresence(presence) {
   latestPresence = presence || {};
-  $("#onlineCount").textContent = String(Object.values(latestPresence).filter((person) => person?.online).length);
+  const onlineUsers = Object.keys(latestParticipants).filter((uid) => presenceSessions(uid).some((session) => session.online === true)).length;
+  $("#onlineCount").textContent = String(onlineUsers);
   renderPeople();
 }
 function renderPeople() {
@@ -785,10 +963,12 @@ function renderPeople() {
   const entries = Object.keys(latestParticipants).slice(0, 16);
   if (!entries.length) return;
   entries.forEach((uid) => {
-    const presence = latestPresence[uid];
+    const sessions = presenceSessions(uid);
+    const online = sessions.some((session) => session.online === true);
+    const presence = sessions.filter((session) => session.online === true).sort((a, b) => Number(b.seenAt || 0) - Number(a.seenAt || 0))[0] || bestPresence(uid);
     const pill = document.createElement("span"); pill.className = "person-pill";
     const dot = document.createElement("i");
-    if (!presence?.online) dot.style.background = "#6d6a80";
+    if (!online) dot.style.background = "#6d6a80";
     const name = document.createElement("span"); name.textContent = presence?.name || `${uid.slice(0, 6)}…`;
     pill.append(dot, name); node.append(pill);
   });
@@ -809,13 +989,19 @@ function renderChat(messages) {
 $("#chatForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!activeRoomCode) return toast("Join a room before chatting");
-  const textValue = $("#chatInput").value.trim();
+  const textValue = $("#chatInput").value.trim().slice(0, 240);
   if (!textValue) return;
-  $("#chatInput").value = "";
+  const remaining = 1200 - (Date.now() - lastChatSentAt);
+  if (remaining > 0) return toast("Please wait a moment before sending another message.");
+  const sendButton = $("#chatForm button[type=submit]");
+  sendButton.disabled = true;
   try {
     const messageRef = push(ref(db, `rooms/${activeRoomCode}/chat`));
     await set(messageRef, { uid: currentUser.uid, name: userName(), text: textValue, createdAt: serverTimestamp() });
+    lastChatSentAt = Date.now();
+    $("#chatInput").value = "";
   } catch (error) { toast(`Message was not sent: ${error.message}`); }
+  finally { sendButton.disabled = false; }
 });
 $("#leaveRoomBtn").addEventListener("click", () => leaveRoom());
 $("#copyRoomCodeBtn").addEventListener("click", async () => {
@@ -829,7 +1015,7 @@ function openRoomModal(mode) {
   roomModalMode = mode;
   const create = mode === "create";
   $("#roomModalTitle").textContent = create ? "Create your room" : "Join your crew";
-  $("#roomModalCopy").textContent = create ? "Give your room a name your friends will recognise." : "Enter the 6-character invite code shared by your host.";
+  $("#roomModalCopy").textContent = create ? "Give your room a name your friends will recognise." : "Enter the invite code shared by your host (new codes have 8 characters).";
   $("#roomNameWrap").classList.toggle("hidden", !create);
   $("#roomCodeWrap").classList.toggle("hidden", create);
   $("#roomModalSubmit").innerHTML = create ? 'Create room <span>↗</span>' : 'Join room <span>↗</span>';
@@ -840,7 +1026,6 @@ function openRoomModal(mode) {
 function closeRoomModal() { $("#roomModal").classList.add("hidden"); }
 $("#createRoomBtn").addEventListener("click", () => openRoomModal("create"));
 $("#joinRoomBtn").addEventListener("click", () => openRoomModal("join"));
-$("#roomCreateInline").addEventListener("click", () => openRoomModal("create"));
 $("#roomJoinInline").addEventListener("click", () => openRoomModal("join"));
 $$("[data-close-modal]").forEach((button) => button.addEventListener("click", closeRoomModal));
 $("#roomModal").addEventListener("click", (event) => { if (event.target === $("#roomModal")) closeRoomModal(); });
@@ -854,6 +1039,68 @@ $("#roomModalForm").addEventListener("submit", async (event) => {
   } catch (error) { setMessage("#roomModalMessage", error.message || "Room action failed.", "error"); }
   finally { setBusy(button, false); }
 });
+
+// Mobile navigation and player settings.
+function scrollToSection(id) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+  $$(".bottom-nav-item").forEach((item) => item.classList.toggle("active", item.dataset.scrollTarget === id));
+  $$(".category-chip").forEach((item) => item.classList.toggle("active", item.dataset.scrollTarget === id));
+}
+$$('[data-scroll-target]').forEach((button) => button.addEventListener("click", () => scrollToSection(button.dataset.scrollTarget)));
+$("#mobileCreateRoomBtn").addEventListener("click", () => openRoomModal("create"));
+$("#mobileProfileBtn").addEventListener("click", openAccountSheet);
+function openPlayerSettings() {
+  settingsReturnFocus = document.activeElement;
+  $("#settingsHostHint").textContent = roomIsHost() ? "You control playback for everyone in this room." : "The room host controls play, pause and seeking.";
+  $("#playerSettingsSheet").classList.remove("hidden");
+  document.body.classList.add("sheet-open");
+  $("#closePlayerSettingsBtn").focus();
+}
+function closePlayerSettings() {
+  $("#playerSettingsSheet").classList.add("hidden");
+  if ($("#accountSheet").classList.contains("hidden")) document.body.classList.remove("sheet-open");
+  settingsReturnFocus?.focus?.();
+  settingsReturnFocus = null;
+}
+function openAccountSheet() {
+  accountReturnFocus = document.activeElement;
+  $("#accountDisplayName").textContent = userName();
+  $("#accountEmail").textContent = currentUser?.email || "Signed-in account";
+  $("#accountRole").textContent = isOwner ? "Owner" : activeMember() ? "Approved member" : "Guest";
+  $("#accountUid").textContent = currentUser?.uid || "Unavailable";
+  $("#accountSheet").classList.remove("hidden");
+  document.body.classList.add("sheet-open");
+  $("#closeAccountSheetBtn").focus();
+}
+function closeAccountSheet() {
+  $("#accountSheet").classList.add("hidden");
+  if ($("#playerSettingsSheet").classList.contains("hidden")) document.body.classList.remove("sheet-open");
+  accountReturnFocus?.focus?.();
+  accountReturnFocus = null;
+}
+$("#playerSettingsBtn").addEventListener("click", openPlayerSettings);
+$("#closePlayerSettingsBtn").addEventListener("click", closePlayerSettings);
+$("#playerSettingsSheet").addEventListener("click", (event) => { if (event.target === $("#playerSettingsSheet")) closePlayerSettings(); });
+$("#playerFullscreenBtn").addEventListener("click", async () => {
+  const frame = $("#playerFrame");
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else if (frame.requestFullscreen) await frame.requestFullscreen();
+    else toast("Fullscreen is not supported by this browser.");
+  } catch { toast("Could not open fullscreen. Try your browser's fullscreen option."); }
+});
+$("#closeAccountSheetBtn").addEventListener("click", closeAccountSheet);
+$("#accountSheet").addEventListener("click", (event) => { if (event.target === $("#accountSheet")) closeAccountSheet(); });
+$("#accountCopyUidBtn").addEventListener("click", async () => {
+  const uid = currentUser?.uid || "";
+  if (!uid) return;
+  try { await navigator.clipboard.writeText(uid); toast("Firebase UID copied"); }
+  catch { toast(`UID: ${uid}`); }
+});
+$("#accountSignOutBtn").addEventListener("click", async () => { closeAccountSheet(); await handleSignOut(); });
+
 
 // Owner-only global allowlist management. New users register first, then share their UID.
 async function listenOwnerMembers() {
@@ -910,4 +1157,16 @@ if ("serviceWorker" in navigator && (location.protocol === "https:" || location.
   navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(() => { /* share-to-app requires an installable PWA; app remains usable without SW */ });
 }
 showQueueMessage("No shared playlist yet", "Create or join a room. The host can load a playlist or add videos to the room.");
-document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeRoomModal(); });
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeRoomModal(); closePlayerSettings(); closeAccountSheet();
+  }
+  const activeSheet = !$("#playerSettingsSheet").classList.contains("hidden") ? $("#playerSettingsSheet") : !$("#accountSheet").classList.contains("hidden") ? $("#accountSheet") : null;
+  if (event.key === "Tab" && activeSheet) {
+    const focusable = [...activeSheet.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter((node) => node.offsetParent !== null);
+    if (!focusable.length) return;
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  }
+});

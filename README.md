@@ -4,7 +4,7 @@
 
 This package has been updated to use the separate SyncTube Web App registered in the existing `schoolfriends-dev` Firebase project. The app uses the new Web App ID and the Realtime Database URL in Singapore. The existing database paths and room-code joining flow are preserved.
 
-Room access works in two stages: the global owner approves a user's Firebase UID under `/members/{uid}`, then that approved user can join a room with its six-character invitation code. Anyone who is not globally approved is denied even if they know a room code. A room host does not separately approve each participant in this version.
+Room access works in two stages: the global owner approves a user's Firebase UID under `/members/{uid}`, then that approved user can join a room with its 8-character invitation code (older 6-character codes remain valid). Anyone who is not globally approved is denied even if they know a room code. A room host does not separately approve each participant in this version.
 
 The service worker cache is versioned as `synctube-shell-v3`; it fetches `app.js` and `firebase-config.js` from the network first to reduce stale-config problems. The PWA icon assets referenced by the manifest and service worker are included in this package.
 
@@ -21,7 +21,7 @@ SyncTube does not host or re-stream video. Each participant's browser loads the 
 - **Single shared playback:** There is no Personal Mode, local-only player, or separate personal playback state.
 - **Host-only transport controls:** The host can play, pause, seek, and move to the previous/next episode. The embedded YouTube controls are hidden so viewers cannot independently control playback. Some browsers may require a viewer to tap **Start synced playback** once to satisfy autoplay restrictions.
 - **Automatic synchronization:** Members follow the host's video/playlist index, playback state, and approximate playback position. Small timing differences from buffering and network latency are normal.
-- **Private rooms:** Create a room and invite approved members using its six-character code. The code is the room invitation: any globally approved SyncTube member who has the code can join; there is no separate per-room host approval step in this version.
+- **Private rooms:** Create a room and invite approved members using its 8-character code (older 6-character codes remain valid). The code is the room invitation: any globally approved SyncTube member who has the code can join; there is no separate per-room host approval step in this version.
 - **Room chat and presence:** Members can send text messages and see who is online.
 - **Owner member management:** The owner can approve Firebase Authentication UIDs.
 - **PWA install/share target:** Installable on supported browsers, with Android share integration where Web Share Target is supported.
@@ -99,7 +99,7 @@ Only UIDs in `/members` with `active: true` can enter the app. Knowing a room co
 ## 4. Create a room and load its shared playlist
 
 1. Sign in with an approved account.
-2. Choose **Create a room**. The room creator becomes its host. Share the six-character invite code with your approved friends.
+2. Choose **Create a room**. The room creator becomes its host. Share the 8-character invite code (older 6-character codes remain valid) with your approved friends.
 3. Friends sign in and choose **Join a room** using that code.
 4. In the host's SyncTube window, paste a YouTube playlist URL into the top field. It should contain `list=...`, for example `https://www.youtube.com/playlist?list=PLAYLIST_ID`, then press **Load**.
 5. To create a queue from separate videos, expand **Build a custom queue from separate videos**, paste one video URL per line (up to 100), and choose **Create queue**.
@@ -153,9 +153,11 @@ rooms/{roomCode}/playback
 rooms/{roomCode}/chat/{messageId}
   uid, name, text, createdAt
 
-rooms/{roomCode}/presence/{uid}
+rooms/{roomCode}/presence/{uid}/{sessionId}
   name, online, seenAt
 ```
+
+The last active room code is stored in per-tab session storage, which survives a page reload without making separate tabs overwrite one another. Explicitly leaving clears that tab’s saved room code. The shared participant record is removed only after the last online tab for that UID leaves.
 
 There is one shared playback record per room. There is no personal playback object in local storage or Firebase. Video bytes stream directly from YouTube to each viewer; Firebase receives only small state/chat/presence data.
 
@@ -169,7 +171,7 @@ There is one shared playback record per room. There is no personal playback obje
 ## 9. Security notes
 
 - Database rules deny access by default and require Firebase Authentication plus an active `/members/{uid}` record.
-- Room reads require participation in that room. Only the room owner can change shared playback.
+- Room playback, chat, participant lists, and presence require participation. Minimal room metadata is readable to active members so a typed invite code can be checked before joining. Only the room owner can change shared playback.
 - The owner can approve global members. This is a private friend-group access model, not a complete public SaaS abuse-prevention system.
 - Firebase App Check can add an abuse-reduction layer, but it does not replace Authentication or database rules.
 - Avoid putting email addresses or sensitive information in room data.
@@ -195,3 +197,12 @@ Then open `http://localhost:8000`. Add `localhost` to Firebase Authentication's 
 - `manifest.webmanifest` — PWA and Android share-target configuration
 - `sw.js` — app-shell caching and PWA installation support
 - `assets/` — SyncTube app icons and favicon
+
+
+## Mobile refresh and room security notes
+
+- New invite codes are 8 characters; older 6-character codes still work.
+- Active room codes are saved per signed-in account and restored after authentication. Choosing **Leave room** removes the local saved code, the current tab's presence session, and the user's participant record.
+- Presence is tracked per browser tab so closing one tab does not mark another tab for the same account as offline.
+- The updated `database.rules.json` must be published to the existing Realtime Database before deploying the website code. See `FIREBASE-SETUP.md`.
+- Chat has a client-side cooldown and field allowlists and payload validation. A client-side cooldown is not a server-enforced rate limit; use a trusted backend for strict anti-spam enforcement.
