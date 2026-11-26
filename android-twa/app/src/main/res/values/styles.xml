@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">@color/sync_purple</item>
+        <item name="android:windowBackground">@color/sync_dark</item>
+        <item name="android:statusBarColor">@color/sync_dark</item>
+        <item name="android:navigationBarColor">@color/sync_dark</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+    <style name="LauncherTheme" parent="android:style/Theme.Translucent.NoTitleBar">
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+</resources>
