@@ -5,11 +5,11 @@ android {
     namespace = "com.heroazure.synctube.twastest"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.heroazure.synctube.twastest"
+        applicationId = "com.heroazure.synctube.twafallbacktest"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
-        versionName = "0.5.0-twa-session-test"
+        versionName = "0.5.1-twa-fallback-test"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
