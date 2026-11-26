@@ -100,7 +100,7 @@ jobs:
           else:
               statements = []
 
-          package_name = "com.heroazure.synctube.twafallbacktest"
+          package_name = "com.heroazure.synctube.nativetwa"
           fingerprint = os.environ["TWA_SHA256_FINGERPRINT"]
           statements = [
               item for item in statements
@@ -132,7 +132,7 @@ jobs:
         with:
           name: SyncTube-Native-TWA-Fix
           path: |
-            android-twa/output/SyncTube-TWA-Fallback-Test.apk
+            android-twa/output/SyncTube-Native-TWA-Fix.apk
             android-twa/output/assetlinks-entry.json
           if-no-files-found: error
           retention-days: 14
