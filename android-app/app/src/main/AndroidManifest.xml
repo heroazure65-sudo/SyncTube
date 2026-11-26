@@ -33,7 +33,7 @@
             android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <meta-data
                 android:name="android.support.customtabs.trusted.DEFAULT_URL"
-                android:value="https://synctube.pntr.dev/" />
+                android:value="https://www.youtube.com/" />
             <meta-data
                 android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR"
                 android:resource="@color/sync_dark" />
@@ -47,7 +47,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:scheme="https"
-                    android:host="synctube.pntr.dev" />
+                    android:host="www.youtube.com" />
             </intent-filter>
         </activity>
     </application>
