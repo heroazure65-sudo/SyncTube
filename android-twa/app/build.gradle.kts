@@ -8,8 +8,8 @@ android {
         applicationId = "com.heroazure.synctube.twafallbacktest"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.5.1-twa-fallback-test"
+        versionCode = 2
+        versionName = "0.6.0-native-twa-launcher"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -24,5 +24,5 @@ android {
     }
 }
 dependencies {
-    implementation("com.google.androidbrowserhelper:androidbrowserhelper:2.7.4")
+    implementation("androidx.browser:browser:1.8.0")
 }
