@@ -5,11 +5,11 @@ android {
     namespace = "com.heroazure.synctube"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.heroazure.synctube"
+        applicationId = "com.heroazure.synctube.youtubetest"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
-        versionName = "0.1.0-preview"
+        versionName = "0.1.0-youtube-test"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
