@@ -1,0 +1,61 @@
+name: Build SyncTube YouTube Launch Experiment
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - experiment/youtube-launch
+    paths:
+      - "android-app/**"
+      - ".github/workflows/build-synctube-youtube-experiment.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-youtube-experiment:
+    name: Build isolated YouTube test APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools"
+
+      - name: Install Android SDK packages
+        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Build YouTube experiment APK
+        working-directory: android-app
+        run: gradle --no-daemon assembleDebug
+
+      - name: Prepare test APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android-app/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          mkdir -p android-app/experiment-output
+          cp "$APK" android-app/experiment-output/SyncTube-YouTube-Experiment.apk
+
+      - name: Upload isolated test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SyncTube-YouTube-Experiment
+          path: android-app/experiment-output/SyncTube-YouTube-Experiment.apk
+          if-no-files-found: error
+          retention-days: 14
