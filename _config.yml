@@ -1,0 +1,3 @@
+# Ensure GitHub Pages publishes the Digital Asset Links verification file.
+include:
+  - .well-known
