@@ -68,5 +68,5 @@ jobs:
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$tag" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$tag" "${files[@]}" --target "$SOURCE_SHA" --title "$title" --notes "$notes" --repo "$GITHUB_REPOSITORY"
+            gh release create "$tag" "${files[@]}" --target "$SOURCE_SHA" --title "$title" --notes-file "$RUNNER_TEMP/release-notes.md" --repo "$GITHUB_REPOSITORY"
           fi
