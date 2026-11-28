@@ -69,9 +69,12 @@
         <span class="brand-word">sync<span>tube</span></span>
       </a>
       <div class="side-label">ROOM PLAYLIST</div>
-      <nav class="side-nav" aria-label="Playlist tools">
-        <button id="scrollQueueBtn" class="nav-item selected"><span class="nav-icon">♫</span> Playlist queue <span class="nav-arrow">›</span></button>
-      </nav>
+      <nav class="side-nav app-side-nav" aria-label="Main navigation">
+<button class="nav-item selected" type="button" data-page-target="home" aria-current="page"><span class="nav-icon">⌂</span><span class="nav-label">Home</span></button>
+<button class="nav-item" type="button" data-page-target="watch"><span class="nav-icon">▶</span><span class="nav-label">Watch</span></button>
+<button class="nav-item" type="button" data-page-target="playlist"><span class="nav-icon">♫</span><span class="nav-label">Playlist</span></button>
+<button class="nav-item" type="button" data-page-target="room"><span class="nav-icon">▣</span><span class="nav-label">Room & chat</span></button>
+</nav>
       <div class="side-divider"></div>
       <div class="side-label">WATCH PARTY</div>
       <div class="side-action-list">
@@ -104,95 +107,30 @@
         </div>
       </header>
 
-      <nav class="mobile-categories" aria-label="Quick sections">
-        <button class="category-chip active" type="button" data-scroll-target="top">For you</button>
-        <button class="category-chip" type="button" data-scroll-target="playerCard">Now playing</button>
-        <button class="category-chip" type="button" data-scroll-target="queuePanel">Playlist</button>
-        <button class="category-chip" type="button" data-scroll-target="roomPanel">Room & chat</button>
-      </nav>
-
-      <div class="workspace">
-        <section class="discover-column">
-          <div class="welcome-row playlist-welcome">
-            <div><div class="eyebrow" id="pageEyebrow">ONE LINK. THE WHOLE SEASON.</div><h1>Queue the <span>whole story.</span></h1><p>Join a room, add a playlist, and everyone follows the same episode.</p></div>
-            <div class="daily-pill"><span class="sparkle">✦</span> One shared screen</div>
-          </div>
-          <section class="playlist-import-card" aria-labelledby="playlistImportTitle">
-            <div class="import-icon">♫</div>
-            <div class="import-copy"><span class="eyebrow">QUICK START</span><h2 id="playlistImportTitle">Bring in a playlist</h2><p>The host loads a complete YouTube playlist or builds a queue. Everyone in the room watches the same shared screen.</p></div>
-            <div class="import-hint"><span>SHARED PLAYBACK</span><strong>YouTube playlists</strong><strong>Custom video queues</strong><button id="installAppBtn" class="btn btn-outline btn-small hidden" type="button">Install app</button></div>
-          </section>
-          <details id="bulkQueueBuilder" class="bulk-queue-builder">
-            <summary><span>＋</span> Build a custom queue from separate videos</summary>
-            <form id="bulkQueueForm" class="bulk-queue-form">
-              <label for="bulkVideoInput">Paste one YouTube video URL per line</label>
-              <textarea id="bulkVideoInput" rows="5" maxlength="12000" placeholder="https://www.youtube.com/watch?v=VIDEO_1&#10;https://www.youtube.com/watch?v=VIDEO_2&#10;https://youtu.be/VIDEO_3"></textarea>
-              <div class="bulk-queue-footer"><span>Up to 100 videos · Duplicate links are removed</span><button class="btn btn-primary btn-small" type="submit">Create queue <span>↗</span></button></div>
-            </form>
-          </details>
-          <section id="queuePanel" class="queue-panel" aria-labelledby="queueTitle">
-            <div class="results-head"><div><h2 id="queueTitle">Room playlist queue</h2><p>Only the host can change the queue or select episodes. Everyone follows the shared playback.</p></div><span id="queueCount" class="result-count">0 items</span></div>
-            <div id="playlistItems" class="playlist-items" aria-live="polite">
-              <div class="queue-empty"><span class="queue-empty-mark">♫</span><strong>No shared playlist yet</strong><p>Create or join a room. The host can load a playlist or add videos to the room.</p></div>
-            </div>
-          </section>
-          <footer class="content-footer"><span>Playback is provided by YouTube's official embedded player.</span><span>SyncTube does not host or re-stream video.</span></footer>
-        </section>
-        <aside class="watch-column">
-          <section class="player-card" id="playerCard">
-            <div class="player-card-head"><div><span class="eyebrow">NOW WATCHING</span><h2>Shared screen</h2></div><div class="player-head-actions"><button id="playerSettingsBtn" class="player-tool-btn" type="button" aria-label="Player settings" title="Player settings">⚙</button><button id="playerFullscreenBtn" class="player-tool-btn" type="button" aria-label="Fullscreen player" title="Fullscreen">⛶</button><span id="playerStateBadge" class="state-badge"><span></span> READY</span></div></div>
-            <div class="player-frame" id="playerFrame">
-              <div id="player"></div>
-              <div id="playerEmpty" class="player-empty"><div class="player-empty-art"><div class="orbit-ring ring-a"></div><div class="orbit-ring ring-b"></div><div class="play-glyph">▶</div></div><strong>Join a room to get started</strong><span>The host starts one shared playlist for everyone.</span></div>
-              <div id="memberStartOverlay" class="member-start-overlay hidden"><strong>Ready to watch together?</strong><span>Your browser may need one tap to start the shared stream.</span><button id="enablePlaybackBtn" class="btn btn-primary btn-small" type="button">Start synced playback</button></div>
-            </div>
-            <div id="hostPlaybackControls" class="host-playback-controls hidden" aria-label="Host playback controls">
-              <div class="transport-row">
-                <button id="previousVideoBtn" class="transport-btn" type="button" aria-label="Previous episode" title="Previous episode">|◀</button>
-                <button id="hostPlayPauseBtn" class="transport-btn transport-primary" type="button">▶ Play</button>
-                <button id="nextVideoBtn" class="transport-btn" type="button" aria-label="Next episode" title="Next episode">▶|</button>
-              </div>
-              <div class="seek-row"><span id="currentTimeLabel">0:00</span><input id="playbackSeek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek shared video"><span id="durationTimeLabel">0:00</span></div>
-            </div>
-            <div class="now-playing"><div class="now-playing-copy"><span id="playingModeLabel" class="eyebrow">ROOM PLAYBACK</span><h3 id="playingTitle">Nothing playing yet</h3><p id="playingChannel">Join a room and wait for the host</p></div><button id="openOnYoutubeBtn" class="icon-btn youtube-open" title="Open on YouTube" aria-label="Open current video on YouTube" disabled>↗</button></div>
-            <div id="hostNotice" class="host-notice hidden">You are watching the room's shared playlist. Only the host can load videos, change the queue, or control playback.</div>
-          </section>
-
-          <section class="room-card" id="roomPanel">
-            <div class="room-card-head"><div><span class="eyebrow">YOUR WATCH PARTY</span><h2 id="roomTitle">No room active</h2></div><span id="roomStatus" class="room-status"><i></i> OFFLINE</span></div>
-            <div class="room-empty" id="roomEmpty"><p>Create or join a private room. The host chooses what plays; everyone else follows along.</p><div class="room-empty-actions"><button id="roomJoinInline" class="btn btn-outline btn-small" type="button">Join with code</button></div></div>
-            <div id="roomActive" class="hidden">
-              <div class="room-code-row"><div><span class="eyebrow">ROOM INVITE CODE</span><strong id="roomCodeDisplay">------</strong></div><button id="copyRoomCodeBtn" class="btn btn-outline btn-small">Copy code</button></div>
-              <div class="room-metrics"><div><strong id="onlineCount">1</strong><span>online now</span></div><div><strong id="memberCount">1</strong><span>room members</span></div><div><strong id="roomRoleValue">—</strong><span>your role</span></div></div>
-              <div id="roomPeople" class="room-people"></div>
-              <div class="chat-box">
-                <div class="chat-head"><strong>Room chat</strong><span>Keep it kind</span></div>
-                <div id="chatMessages" class="chat-messages"><div class="chat-placeholder">Say hello to the room.</div></div>
-                <form id="chatForm" class="chat-form"><input id="chatInput" type="text" maxlength="240" placeholder="Message the room…" autocomplete="off" aria-label="Message the room"><button type="submit" aria-label="Send message">↑</button></form>
-              </div>
-              <div class="room-foot"><button id="leaveRoomBtn" class="text-button">Leave room</button><span>Invite-only · Invite code required</span></div>
-            </div>
-          </section>
-
-          <section id="ownerPanel" class="owner-card hidden">
-            <div class="owner-card-head"><span class="eyebrow">OWNER TOOLS</span><span class="owner-tag">OWNER</span></div>
-            <h3>Manage the guest list</h3><p>Add a member using their Firebase Authentication UID.</p>
-            <form id="addMemberForm" class="add-member-form"><input id="memberUidInput" type="text" maxlength="128" placeholder="Paste member UID" autocomplete="off" required><button class="btn btn-primary btn-small" type="submit">Approve</button></form>
-            <p id="ownerMessage" class="form-message"></p>
-            <div id="memberList" class="member-list"></div>
-          </section>
-        </aside>
-      </div>
+      <div class="workspace app-pages" id="appPages">
+<section class="app-page active" id="homePage" data-app-page="home" aria-labelledby="homePageTitle">
+<div><div class="eyebrow" id="pageEyebrow">ONE LINK. THE WHOLE SEASON.</div><h1 id="homePageTitle">Queue the <span>whole story.</span></h1><p>Join a room, add a playlist, and everyone follows the same episode.</p></div>
+<div class="import-icon">♫</div>
+<div class="home-shortcuts" aria-label="Quick navigation">
+<button class="home-shortcut" type="button" data-page-target="watch"><span class="shortcut-icon">▶</span><span><strong>Open shared screen</strong><small>Watch the room's current video</small></span><span class="shortcut-arrow">↗</span></button>
+<button class="home-shortcut" type="button" data-page-target="playlist"><span class="shortcut-icon">♫</span><span><strong>Manage playlist</strong><small>Browse the shared queue</small></span><span class="shortcut-arrow">↗</span></button>
+<button class="home-shortcut" type="button" data-page-target="room"><span class="shortcut-icon">▣</span><span><strong>Open watch party</strong><small>Room members and chat</small></span><span class="shortcut-arrow">↗</span></button>
+</div><span>Playback is provided by YouTube's official embedded player.</span></section>
+<section class="app-page" id="watchPage" data-app-page="watch" aria-labelledby="watchPageTitle"><div class="page-heading"><span class="eyebrow">WATCH TOGETHER</span><h1 id="watchPageTitle">Shared screen</h1><p>The video playing in your room, synchronized for everyone.</p></div><div class="player-card-head"><div><span class="eyebrow">NOW WATCHING</span><h2>Shared screen</h2></div><div class="player-head-actions"><button id="playerSettingsBtn" class="player-tool-btn" type="button" aria-label="Player settings" title="Player settings">⚙</button><button id="playerFullscreenBtn" class="player-tool-btn" type="button" aria-label="Fullscreen player" title="Fullscreen">⛶</button><span id="playerStateBadge" class="state-badge"><span></span> READY</span></div></div></section>
+<section class="app-page" id="playlistPage" data-app-page="playlist" aria-labelledby="playlistPageTitle"><div class="page-heading"><span class="eyebrow">YOUR SHARED QUEUE</span><h1 id="playlistPageTitle">Playlist</h1><p>Load a playlist from the top bar or build a queue from separate videos.</p></div><summary><span>＋</span> Build a custom queue from separate videos</summary><div class="results-head"><div><h2 id="queueTitle">Room playlist queue</h2><p>Only the host can change the queue or select episodes. Everyone follows the shared playback.</p></div><span id="queueCount" class="result-count">0 items</span></div></section>
+<section class="app-page" id="roomPage" data-app-page="room" aria-labelledby="roomPageTitle"><div class="page-heading"><span class="eyebrow">YOUR WATCH PARTY</span><h1 id="roomPageTitle">Room & chat</h1><p>Invite friends, see who's online, and chat while watching.</p></div><div class="room-card-head"><div><span class="eyebrow">YOUR WATCH PARTY</span><h2 id="roomTitle">No room active</h2></div><span id="roomStatus" class="room-status"><i></i> OFFLINE</span></div><div class="owner-card-head"><span class="eyebrow">OWNER TOOLS</span><span class="owner-tag">OWNER</span></div></section>
+</div>
     </main>
   </div>
 
   <nav class="mobile-bottom-nav" aria-label="Main navigation">
-    <button class="bottom-nav-item active" type="button" data-scroll-target="top"><span>⌂</span><small>Home</small></button>
-    <button class="bottom-nav-item" type="button" data-scroll-target="queuePanel"><span>♫</span><small>Playlist</small></button>
-    <button class="bottom-nav-create" id="mobileCreateRoomBtn" type="button" aria-label="Create a room">＋</button>
-    <button class="bottom-nav-item" type="button" data-scroll-target="roomPanel"><span>▣</span><small>Room</small></button>
-    <button class="bottom-nav-item" type="button" id="mobileProfileBtn"><span>●</span><small>You</small></button>
-  </nav>
+<button class="bottom-nav-item active" type="button" data-page-target="home" aria-current="page"><span>⌂</span><small>Home</small></button>
+<button class="bottom-nav-item" type="button" data-page-target="watch"><span>▶</span><small>Watch</small></button>
+<button class="bottom-nav-item" type="button" data-page-target="playlist"><span>♫</span><small>Playlist</small></button>
+<button class="bottom-nav-create" id="mobileCreateRoomBtn" type="button" aria-label="Create a room">＋</button>
+<button class="bottom-nav-item" type="button" data-page-target="room"><span>▣</span><small>Room</small></button>
+<button class="bottom-nav-item" type="button" id="mobileProfileBtn"><span>●</span><small>You</small></button>
+</nav>
 
   <div id="playerSettingsSheet" class="settings-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="playerSettingsTitle">
     <section class="settings-sheet">
