@@ -29,6 +29,58 @@ function toast(message) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => node.classList.remove("show"), 2600);
 }
+
+const THEME_SETTINGS_KEY = "synctube:v1:settings";
+const THEME_MODES = ["system", "light", "dark"];
+let themePreference = "system";
+try {
+  const savedSettings = JSON.parse(localStorage.getItem(THEME_SETTINGS_KEY) || "{}");
+  if (THEME_MODES.includes(savedSettings?.theme)) themePreference = savedSettings.theme;
+} catch { /* Storage can be disabled; System remains the default. */ }
+
+function applyThemePreference(mode, persist = true) {
+  themePreference = THEME_MODES.includes(mode) ? mode : "system";
+  if (themePreference === "system") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", themePreference);
+
+  const button = $("#themeToggleBtn");
+  if (button) {
+    const index = THEME_MODES.indexOf(themePreference);
+    const nextMode = THEME_MODES[(index + 1) % THEME_MODES.length];
+    const currentLabel = themePreference[0].toUpperCase() + themePreference.slice(1);
+    const nextLabel = nextMode[0].toUpperCase() + nextMode.slice(1);
+    const description = `Color theme: ${currentLabel}. Activate to switch to ${nextLabel}.`;
+    button.setAttribute("aria-label", description);
+    button.title = description;
+    const visibleLabel = button.querySelector(".theme-mode-label");
+    if (visibleLabel) visibleLabel.textContent = currentLabel;
+  }
+
+  const darkPreference = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+  const isDark = themePreference === "dark" || (themePreference === "system" && darkPreference !== false);
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeMeta) themeMeta.content = isDark ? "#0b0b12" : "#f5f3f8";
+
+  if (persist) {
+    try {
+      const current = JSON.parse(localStorage.getItem(THEME_SETTINGS_KEY) || "{}");
+      const settings = current && typeof current === "object" && !Array.isArray(current) ? current : {};
+      settings.theme = themePreference;
+      localStorage.setItem(THEME_SETTINGS_KEY, JSON.stringify(settings));
+    } catch { /* The theme still changes for this page view. */ }
+  }
+}
+applyThemePreference(themePreference, false);
+$("#themeToggleBtn").addEventListener("click", () => {
+  const nextMode = THEME_MODES[(THEME_MODES.indexOf(themePreference) + 1) % THEME_MODES.length];
+  applyThemePreference(nextMode);
+  toast(`Theme: ${nextMode[0].toUpperCase() + nextMode.slice(1)}`);
+});
+const systemThemeQuery = window.matchMedia?.("(prefers-color-scheme: dark)");
+systemThemeQuery?.addEventListener?.("change", () => {
+  if (themePreference === "system") applyThemePreference("system", false);
+});
+
 function setMessage(selector, message, type = "") {
   const node = $(selector);
   if (!node) return;
@@ -1044,7 +1096,8 @@ $("#roomModalForm").addEventListener("submit", async (event) => {
 function scrollToSection(id) {
   const target = document.getElementById(id);
   if (!target) return;
-  target.scrollIntoView({ behavior: "smooth", block: "start" });
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
   $$(".bottom-nav-item").forEach((item) => item.classList.toggle("active", item.dataset.scrollTarget === id));
   $$(".category-chip").forEach((item) => item.classList.toggle("active", item.dataset.scrollTarget === id));
 }
@@ -1149,6 +1202,21 @@ $("#installAppBtn").addEventListener("click", async () => {
 window.addEventListener("appinstalled", () => {
   $("#installAppBtn").classList.add("hidden");
   toast("SyncTube installed. You can now share YouTube links to it.");
+});
+
+
+function updateOfflineBanner() {
+  $("#offlineBanner").classList.toggle("hidden", navigator.onLine);
+}
+updateOfflineBanner();
+window.addEventListener("offline", updateOfflineBanner);
+window.addEventListener("online", () => {
+  updateOfflineBanner();
+  toast("Connection restored");
+});
+$("#offlineRetryBtn").addEventListener("click", () => {
+  if (!navigator.onLine) return toast("Still offline. Check your connection and retry.");
+  window.location.reload();
 });
 
 // Initial UI state and basic keyboard conveniences.

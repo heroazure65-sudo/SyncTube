@@ -16,9 +16,10 @@
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <div class="ambient ambient-one" aria-hidden="true"></div>
-  <div class="ambient ambient-two" aria-hidden="true"></div>
-
+  <div id="offlineBanner" class="offline-banner hidden" role="status" aria-live="polite">
+    <span>You are offline. Cached pages may still open; live rooms need a connection.</span>
+    <button id="offlineRetryBtn" type="button">Retry</button>
+  </div>
   <section id="authGate" class="gate-screen">
     <div class="gate-card">
       <a class="brand brand-large" href="#" aria-label="SyncTube home">
@@ -87,13 +88,18 @@
       <header class="topbar">
         <div class="mobile-brand"><span class="brand-mark"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 4.5 42 14.7v18.6L24 43.5 6 33.3V14.7L24 4.5Z" fill="none" stroke="#a98aff" stroke-width="2.5"/><path d="M19 16.5 32 24l-13 7.5v-15Z" fill="#6ee7f0"/></svg></span><span class="brand-word">sync<span>tube</span></span></div>
         <form id="playlistForm" class="search-bar playlist-bar">
-          <span class="search-icon">↗</span>
+          <span class="search-icon" aria-hidden="true">↗</span>
+          <label class="sr-only" for="playlistInput">YouTube video or playlist URL</label>
           <input id="playlistInput" type="url" maxlength="500" placeholder="Add a YouTube playlist or video to the room…" aria-label="YouTube playlist or video URL for the shared room" autocomplete="off" required>
           <kbd>LINK</kbd>
           <button type="submit" aria-label="Load into shared room">Load</button>
         </form>
         <div class="topbar-right">
           <div class="room-chip" id="roomChip"><span class="room-chip-dot"></span><span id="roomChipText">No room joined</span></div>
+          <button id="themeToggleBtn" class="theme-toggle" type="button" aria-label="Color theme: System. Activate to switch to Light." title="Color theme: System">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="12.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 20h8M12 16.5V20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            <span class="theme-mode-label">System</span>
+          </button>
           <div class="top-avatar" id="topAvatar">S</div><button id="topSignOutBtn" class="icon-btn top-signout" aria-label="Sign out" title="Sign out">↪</button>
         </div>
       </header>
