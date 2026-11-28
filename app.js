@@ -376,7 +376,7 @@ $("#bulkQueueForm").addEventListener("submit", (event) => {
   $("#bulkQueueBuilder").open = false;
   toast(`Shared ${ids.length} videos with the room`);
 });
-$("#scrollQueueBtn").addEventListener("click", () => $("#queuePanel").scrollIntoView({ behavior: "smooth", block: "start" }));
+
 
 // Official YouTube IFrame Player. YouTube hosts the media and owns its playback controls.
 function loadYouTubeApi() {
@@ -1092,18 +1092,20 @@ $("#roomModalForm").addEventListener("submit", async (event) => {
   finally { setBusy(button, false); }
 });
 
-// Mobile navigation and player settings.
-function scrollToSection(id) {
-  const target = document.getElementById(id);
-  if (!target) return;
-  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-  target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
-  $$(".bottom-nav-item").forEach((item) => item.classList.toggle("active", item.dataset.scrollTarget === id));
-  $$(".category-chip").forEach((item) => item.classList.toggle("active", item.dataset.scrollTarget === id));
+// App navigation: primary tools live on separate, focused pages.
+function openAppPage(name) {
+ const page=document.querySelector(`[data-app-page="${name}"]`); if(!page)return;
+ $$(".app-page").forEach(item=>{const active=item===page;item.classList.toggle("active",active);item.setAttribute("aria-hidden",String(!active));});
+ $$("[data-page-target]").forEach(button=>{const active=button.dataset.pageTarget===name;button.classList.toggle("selected",active);button.classList.toggle("active",active);if(active)button.setAttribute("aria-current","page");else button.removeAttribute("aria-current");});
+ document.body.dataset.appPage=name;
+ window.scrollTo({top:0,behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches?"auto":"smooth"});
+ if(name==="watch")setTimeout(()=>window.dispatchEvent(new Event("resize")),80);
 }
-$$('[data-scroll-target]').forEach((button) => button.addEventListener("click", () => scrollToSection(button.dataset.scrollTarget)));
-$("#mobileCreateRoomBtn").addEventListener("click", () => openRoomModal("create"));
-$("#mobileProfileBtn").addEventListener("click", openAccountSheet);
+$$("[data-page-target]").forEach(button=>button.addEventListener("click",()=>openAppPage(button.dataset.pageTarget)));
+$("#mobileCreateRoomBtn").addEventListener("click",()=>openRoomModal("create"));
+$("#mobileProfileBtn").addEventListener("click",openAccountSheet);
+openAppPage("home");
+
 function openPlayerSettings() {
   settingsReturnFocus = document.activeElement;
   $("#settingsHostHint").textContent = roomIsHost() ? "You control playback for everyone in this room." : "The room host controls play, pause and seeking.";
@@ -1136,14 +1138,17 @@ function closeAccountSheet() {
 $("#playerSettingsBtn").addEventListener("click", openPlayerSettings);
 $("#closePlayerSettingsBtn").addEventListener("click", closePlayerSettings);
 $("#playerSettingsSheet").addEventListener("click", (event) => { if (event.target === $("#playerSettingsSheet")) closePlayerSettings(); });
-$("#playerFullscreenBtn").addEventListener("click", async () => {
-  const frame = $("#playerFrame");
-  try {
-    if (document.fullscreenElement) await document.exitFullscreen();
-    else if (frame.requestFullscreen) await frame.requestFullscreen();
-    else toast("Fullscreen is not supported by this browser.");
-  } catch { toast("Could not open fullscreen. Try your browser's fullscreen option."); }
+$("#playerFullscreenBtn").addEventListener("click",async()=>{
+ const frame=$("#playerFrame");
+ try{
+  if(document.fullscreenElement){await document.exitFullscreen();try{screen.orientation?.unlock?.();}catch{}return;}
+  if(!frame.requestFullscreen){toast("Fullscreen is not supported by this browser.");return;}
+  await frame.requestFullscreen({navigationUI:"hide"});
+  try{if(screen.orientation?.lock)await screen.orientation.lock("landscape");}
+  catch{toast("Fullscreen is on. Rotate your device to landscape if it did not rotate automatically.");}
+ }catch{toast("Could not open fullscreen. Try your browser's fullscreen option.");}
 });
+document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement){try{screen.orientation?.unlock?.();}catch{}}});
 $("#closeAccountSheetBtn").addEventListener("click", closeAccountSheet);
 $("#accountSheet").addEventListener("click", (event) => { if (event.target === $("#accountSheet")) closeAccountSheet(); });
 $("#accountCopyUidBtn").addEventListener("click", async () => {
