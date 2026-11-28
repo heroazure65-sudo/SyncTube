@@ -485,3 +485,15 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: no
 }
 @media(orientation:landscape) and (max-height:520px){#playerFrame:fullscreen,#playerFrame:-webkit-full-screen{height:100vh;height:100dvh}.player-card{padding:10px}}
 @media(prefers-reduced-motion:reduce){.app-page,.player-empty-art::before,.portal-core,.orbit-ring,.play-glyph,.player-particle{animation:none!important}}
+
+/* Keep system-dark users on dark surfaces when the theme preference is System. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .player-empty { background:radial-gradient(ellipse at 50% 45%,rgba(116,78,255,.19),transparent 60%),#0d0c17; color:var(--text); }
+  :root:not([data-theme]) .player-empty span { color:#77758d; }
+  :root:not([data-theme]) .orbit-ring { border-color:rgba(173,147,255,.56); }
+  :root:not([data-theme]) .player-empty-art::before { background:radial-gradient(ellipse,rgba(117,86,255,.34),rgba(74,215,225,.12) 48%,transparent 72%); }
+  :root:not([data-theme]) .portal-core { border-color:rgba(162,137,255,.42); }
+  :root:not([data-theme]) .uid-box { background:#0b0b14; color:#c1b5ee; border-color:var(--line); }
+  :root:not([data-theme]) .pending-icon { background:rgba(150,112,255,.1); color:#b49aff; border-color:rgba(157,127,255,.35); }
+  :root:not([data-theme]) input::placeholder, :root:not([data-theme]) textarea::placeholder { color:#666579; }
+}
