@@ -1084,12 +1084,34 @@ $("#playerSettingsBtn").addEventListener("click", openPlayerSettings);
 $("#closePlayerSettingsBtn").addEventListener("click", closePlayerSettings);
 $("#playerSettingsSheet").addEventListener("click", (event) => { if (event.target === $("#playerSettingsSheet")) closePlayerSettings(); });
 $("#playerFullscreenBtn").addEventListener("click", async () => {
-  const frame = $("#playerFrame");
+  const playerCard = $("#playerCard");
   try {
-    if (document.fullscreenElement) await document.exitFullscreen();
-    else if (frame.requestFullscreen) await frame.requestFullscreen();
-    else toast("Fullscreen is not supported by this browser.");
-  } catch { toast("Could not open fullscreen. Try your browser's fullscreen option."); }
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+      return;
+    }
+    if (!playerCard.requestFullscreen) {
+      toast("Fullscreen is not supported here. Rotate your phone to landscape instead.");
+      return;
+    }
+    await playerCard.requestFullscreen();
+    // Android browsers can lock orientation after entering fullscreen. If not
+    // supported, the player still fills the screen and follows device rotation.
+    try { await screen.orientation?.lock?.("landscape"); } catch { /* browser/device may not allow orientation lock */ }
+  } catch {
+    toast("Could not open fullscreen. Rotate your phone to landscape and try again.");
+  }
+});
+document.addEventListener("fullscreenchange", () => {
+  const active = document.fullscreenElement === $("#playerCard");
+  document.body.classList.toggle("player-fullscreen-active", active);
+  const button = $("#playerFullscreenBtn");
+  button.textContent = active ? "⤢" : "⛶";
+  button.title = active ? "Exit fullscreen" : "Fullscreen landscape player";
+  button.setAttribute("aria-label", button.title);
+  if (!active) {
+    try { screen.orientation?.unlock?.(); } catch { /* optional API */ }
+  }
 });
 $("#closeAccountSheetBtn").addEventListener("click", closeAccountSheet);
 $("#accountSheet").addEventListener("click", (event) => { if (event.target === $("#accountSheet")) closeAccountSheet(); });
