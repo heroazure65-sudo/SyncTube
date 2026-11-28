@@ -1096,7 +1096,7 @@ $("#roomModalForm").addEventListener("submit", async (event) => {
 function openAppPage(name) {
  const page=document.querySelector(`[data-app-page="${name}"]`); if(!page)return;
  $$(".app-page").forEach(item=>{const active=item===page;item.classList.toggle("active",active);item.setAttribute("aria-hidden",String(!active));});
- $$("[data-page-target]").forEach(button=>{const active=button.dataset.pageTarget===name;button.classList.toggle("selected",active);button.classList.toggle("active",active);if(active)button.setAttribute("aria-current","page");else button.removeAttribute("aria-current");});
+ $(".app-side-nav [data-page-target], .mobile-bottom-nav [data-page-target]").forEach(button=>{const active=button.dataset.pageTarget===name;button.classList.toggle("selected",active);button.classList.toggle("active",active);if(active)button.setAttribute("aria-current","page");else button.removeAttribute("aria-current");});
  document.body.dataset.appPage=name;
  window.scrollTo({top:0,behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches?"auto":"smooth"});
  if(name==="watch")setTimeout(()=>window.dispatchEvent(new Event("resize")),80);
