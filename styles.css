@@ -88,3 +88,103 @@ body.sheet-open { overflow: hidden; overscroll-behavior: none; }
   .category-chip { min-height:40px; }
   .transport-btn { min-height:44px; }
 }
+
+
+/* Touch safety: decorative layers must never intercept controls. */
+.ambient,
+.gate-card::before,
+.player-empty,
+.player-empty-art,
+.orbit-ring,
+.thumb-overlay,
+.toast {
+  pointer-events: none;
+}
+.gate-screen {
+  position: relative;
+  isolation: isolate;
+  z-index: 1;
+}
+.gate-card {
+  position: relative;
+  z-index: 2;
+  isolation: isolate;
+  pointer-events: auto;
+}
+.gate-card::before { z-index: 0; }
+.gate-card > * {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+button, a, input, textarea, select, summary {
+  touch-action: manipulation;
+}
+#authGate .auth-tabs,
+#authGate .auth-form,
+#authGate .google-auth-btn {
+  position: relative;
+  z-index: 3;
+  pointer-events: auto;
+}
+
+/* The full-screen target is the complete player card, so transport controls
+   and the now-playing strip remain visible in landscape mode. */
+.player-card:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 12px clamp(12px, 2.5vw, 34px);
+  border: 0;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #05050a;
+  overflow: hidden;
+}
+.player-card:fullscreen .player-card-head,
+.player-card:fullscreen .transport-row,
+.player-card:fullscreen .now-playing {
+  flex: 0 0 auto;
+}
+.player-card:fullscreen .player-frame {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  aspect-ratio: auto;
+  margin-top: 0;
+  border-radius: 10px;
+}
+.player-card:fullscreen .player-frame #player,
+.player-card:fullscreen .player-frame iframe {
+  width: 100%;
+  height: 100%;
+}
+.player-card:fullscreen .now-playing {
+  padding-top: 3px;
+}
+.player-card:fullscreen::backdrop {
+  background: #05050a;
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .player-card:fullscreen {
+    padding: 7px 14px;
+    gap: 6px;
+  }
+  .player-card:fullscreen .player-card-head h2 {
+    font-size: 13px;
+  }
+  .player-card:fullscreen .player-frame {
+    border-radius: 7px;
+  }
+  .player-card:fullscreen .now-playing {
+    padding-top: 0;
+  }
+  .player-card:fullscreen .host-notice {
+    display: none;
+  }
+}
