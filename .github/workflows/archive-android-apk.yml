@@ -64,7 +64,7 @@ jobs:
           test "${#files[@]}" -gt 0
           tag="apk-build-${SOURCE_RUN_ID}"
           title="SyncTube APK build #${RUN_NUMBER}"
-          notes="Permanent APK backup.\n\nSource branch: ${SOURCE_BRANCH}\nSource commit: ${SOURCE_SHA}\nOriginal Actions run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}"
+          printf 'Permanent APK backup.\n\nSource branch: %s\nSource commit: %s\nOriginal Actions run: https://github.com/%s/actions/runs/%s\n' "$SOURCE_BRANCH" "$SOURCE_SHA" "$GITHUB_REPOSITORY" "$SOURCE_RUN_ID" > "$RUNNER_TEMP/release-notes.md"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$tag" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
           else
