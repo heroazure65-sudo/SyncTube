@@ -4,7 +4,12 @@ import android.app.Activity;
 import android.content.ComponentName;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.VideoView;
@@ -20,14 +25,16 @@ import androidx.browser.trusted.TrustedWebActivityIntentBuilder;
 import com.heroazure.synctube.twastest.R;
 
 /**
- * Plays the bundled SyncTube mascot intro, then launches the verified TWA.
- * If the video cannot be decoded or the trusted browser is unavailable,
- * it falls back to a normal Chrome Custom Tab rather than exiting silently.
+ * Plays the bundled SyncTube intro, gives one short haptic double-pulse on
+ * the wordmark reveal, then launches the verified TWA.
  */
 public final class SyncTubeLauncherActivity extends Activity {
     private static final Uri START_URL = Uri.parse("https://synctube.pntr.dev/");
+    private static final long HAPTIC_REVEAL_DELAY_MS = 1450L;
+
     private boolean launchStarted;
     private boolean serviceBound;
+    private boolean revealHapticScheduled;
 
     private final CustomTabsServiceConnection serviceConnection =
             new CustomTabsServiceConnection() {
@@ -90,9 +97,32 @@ public final class SyncTubeLauncherActivity extends Activity {
             video.setOnPreparedListener(mp -> {
                 mp.setLooping(false);
                 video.start();
+                scheduleRevealHaptic();
             });
         } catch (RuntimeException error) {
             launchBrowser();
+        }
+    }
+
+    private void scheduleRevealHaptic() {
+        if (revealHapticScheduled) return;
+        revealHapticScheduled = true;
+        new Handler(Looper.getMainLooper()).postDelayed(
+                this::performRevealHaptic, HAPTIC_REVEAL_DELAY_MS);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void performRevealHaptic() {
+        Vibrator vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+        if (vibrator == null || !vibrator.hasVibrator()) return;
+
+        // Two restrained taps, aligned with the SyncTube wordmark reveal.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            long[] timings = {0, 32, 55, 48};
+            int[] amplitudes = {0, 90, 0, 135};
+            vibrator.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1));
+        } else {
+            vibrator.vibrate(new long[] {0, 32, 55, 48}, -1);
         }
     }
 
