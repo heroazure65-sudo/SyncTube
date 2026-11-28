@@ -97,6 +97,8 @@ if 'screen.orientation.lock("landscape")' not in js:
     fail("landscape orientation support is missing from fullscreen playback")
 if "#playerFrame:fullscreen" not in css or "@keyframes portalPulse" not in css:
     fail("fullscreen player layout or animated empty-player treatment is missing")
+if "@media (prefers-color-scheme: dark)" not in css or ":root:not([data-theme]) .player-empty" not in css:
+    fail("system-dark player surfaces are not explicitly protected from light-theme overrides")
 
 print("SyncTube frontend smoke checks passed.")
 print(f"Checked {len(parser.seen)} unique HTML IDs and {len(referenced_ids)} static app.js ID references.")
