@@ -1,0 +1,43 @@
+name: Frontend smoke checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "styles.css"
+      - "app.js"
+      - "manifest.webmanifest"
+      - "sw.js"
+      - "scripts/validate_frontend.py"
+      - ".github/workflows/frontend-smoke.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "styles.css"
+      - "app.js"
+      - "manifest.webmanifest"
+      - "sw.js"
+      - "scripts/validate_frontend.py"
+      - ".github/workflows/frontend-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate web shell
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check JavaScript module syntax
+        run: node --input-type=module --check < app.js
+      - name: Run frontend smoke checks
+        run: python3 scripts/validate_frontend.py
