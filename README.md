@@ -6,7 +6,7 @@ This package has been updated to use the separate SyncTube Web App registered in
 
 Room access works in two stages: the global owner approves a user's Firebase UID under `/members/{uid}`, then that approved user can join a room with its 8-character invitation code (older 6-character codes remain valid). Anyone who is not globally approved is denied even if they know a room code. A room host does not separately approve each participant in this version.
 
-The service worker cache is versioned as `synctube-shell-v3`; it fetches `app.js` and `firebase-config.js` from the network first to reduce stale-config problems. The PWA icon assets referenced by the manifest and service worker are included in this package.
+The service worker cache is versioned as `synctube-shell-v6`; it fetches `app.js` and `firebase-config.js` from the network first to reduce stale-config problems. The PWA icon is provided as `assets/app-icon.svg` and is precached by the service worker.
 
 
 SyncTube is a lightweight, private YouTube watch-party website designed for GitHub Pages and Firebase. **There is only one playback mode: Watch Together.** Each room has one shared YouTube player state and one shared playlist/queue. The room host controls playback; approved members watch the same room stream, chat, and see who is online.
