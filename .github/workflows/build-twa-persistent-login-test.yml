@@ -1,0 +1,138 @@
+name: Build SyncTube TWA Persistent Login Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - android/twa-fallback-test
+      - android/twa-native-launcher-fix
+    paths:
+      - "android-twa/**"
+      - ".github/workflows/build-twa-persistent-login-test.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Chrome-backed test APK and verify origin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools"
+
+      - name: Install Android SDK packages
+        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Build APK
+        working-directory: android-twa
+        run: gradle --no-daemon assembleDebug
+
+      - name: Generate signing fingerprint and asset links
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android-twa/app/build/outputs/apk/debug/app-debug.apk"
+          APKSIGNER="$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
+          test -s "$APK"
+          test -x "$APKSIGNER"
+          SIGNER_INFO="$("$APKSIGNER" verify --print-certs "$APK")"
+          FINGERPRINT_RAW="$(printf '%s\n' "$SIGNER_INFO" | sed -nE 's/.*certificate SHA-256 digest: ([[:xdigit:]:]+).*/\1/p' | head -n 1)"
+          FINGERPRINT_HEX="$(printf '%s' "$FINGERPRINT_RAW" | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+          if ! [[ "$FINGERPRINT_HEX" =~ ^[[:xdigit:]]{64}$ ]]; then
+            printf '%s\n' "$SIGNER_INFO"
+            echo "Could not read the APK signing certificate SHA-256 fingerprint."
+            exit 1
+          fi
+          FINGERPRINT="$(printf '%s' "$FINGERPRINT_HEX" | sed 's/../&:/g; s/:$//')"
+          echo "TWA_SHA256_FINGERPRINT=$FINGERPRINT" >> "$GITHUB_ENV"
+          mkdir -p android-twa/output
+          cp "$APK" android-twa/output/SyncTube-Native-TWA-Fix.apk
+          cat > android-twa/output/assetlinks-entry.json <<JSON
+          [
+            {
+              "relation": ["delegate_permission/common.handle_all_urls"],
+              "target": {
+                "namespace": "android_app",
+                "package_name": "com.heroazure.synctube.nativetwa",
+                "sha256_cert_fingerprints": ["${FINGERPRINT}"]
+              }
+            }
+          ]
+          JSON
+          python3 -m json.tool android-twa/output/assetlinks-entry.json > /dev/null
+          echo "TWA test signer fingerprint: $FINGERPRINT"
+
+      - name: Publish matching Digital Asset Links entry
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git worktree add /tmp/synctube-main FETCH_HEAD
+          mkdir -p /tmp/synctube-main/.well-known
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("/tmp/synctube-main/.well-known/assetlinks.json")
+          if path.exists():
+              try:
+                  statements = json.loads(path.read_text(encoding="utf-8"))
+              except json.JSONDecodeError:
+                  statements = []
+          else:
+              statements = []
+
+          package_name = "com.heroazure.synctube.nativetwa"
+          fingerprint = os.environ["TWA_SHA256_FINGERPRINT"]
+          statements = [
+              item for item in statements
+              if item.get("target", {}).get("package_name") != package_name
+          ]
+          statements.append({
+              "relation": ["delegate_permission/common.handle_all_urls"],
+              "target": {
+                  "namespace": "android_app",
+                  "package_name": package_name,
+                  "sha256_cert_fingerprints": [fingerprint]
+              }
+          })
+          path.write_text(json.dumps(statements, indent=2) + "\n", encoding="utf-8")
+          json.loads(path.read_text(encoding="utf-8"))
+          PY
+          git -C /tmp/synctube-main config user.name "github-actions[bot]"
+          git -C /tmp/synctube-main config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C /tmp/synctube-main add .well-known/assetlinks.json
+          if git -C /tmp/synctube-main diff --cached --quiet; then
+            echo "Digital Asset Links already matches this APK."
+          else
+            git -C /tmp/synctube-main commit -m "Add SyncTube TWA session test verification"
+            git -C /tmp/synctube-main push origin HEAD:main
+          fi
+
+      - name: Upload APK and verification entry
+        uses: actions/upload-artifact@v4
+        with:
+          name: SyncTube-Native-TWA-Fix
+          path: |
+            android-twa/output/SyncTube-Native-TWA-Fix.apk
+            android-twa/output/assetlinks-entry.json
+          if-no-files-found: error
+          retention-days: 90
