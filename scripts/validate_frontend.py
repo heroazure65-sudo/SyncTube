@@ -81,8 +81,16 @@ if manifest.get("display") not in {"standalone", "fullscreen", "minimal-ui"}:
 
 if "@media (prefers-reduced-motion: reduce)" not in css:
     fail("CSS reduced-motion support is missing")
-if "synctube-shell-v5" not in sw:
+if "synctube-shell-v6" not in sw:
     fail("service-worker cache name was not bumped with the current shell")
+
+icon_path = ROOT / "assets" / "app-icon.svg"
+if not icon_path.is_file():
+    fail("PWA app icon asset is missing")
+if "./assets/app-icon.svg" not in html or "./assets/app-icon.svg" not in sw:
+    fail("HTML and service worker must reference the existing app icon")
+if any(not (ROOT / icon["src"].removeprefix("./")).is_file() for icon in manifest.get("icons", [])):
+    fail("manifest references a missing icon asset")
 if "synctube:v1:settings" not in js:
     fail("versioned theme-preference storage key is missing")
 
