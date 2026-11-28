@@ -1,4 +1,4 @@
-const CACHE_NAME = "synctube-shell-v5";
+const CACHE_NAME = "synctube-shell-v6";
 const APP_FILES = [
   "./",
   "./index.html",
@@ -6,9 +6,7 @@ const APP_FILES = [
   "./app.js",
   "./firebase-config.js",
   "./manifest.webmanifest",
-  "./assets/favicon.svg",
-  "./assets/app-icon-192.png",
-  "./assets/app-icon-512.png"
+  "./assets/app-icon.svg"
 ];
 
 self.addEventListener("install", (event) => {
