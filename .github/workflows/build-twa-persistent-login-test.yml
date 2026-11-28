@@ -135,4 +135,4 @@ jobs:
             android-twa/output/SyncTube-Native-TWA-Fix.apk
             android-twa/output/assetlinks-entry.json
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
