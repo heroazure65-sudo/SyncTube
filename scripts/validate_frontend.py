@@ -86,5 +86,17 @@ if "synctube-shell-v5" not in sw:
 if "synctube:v1:settings" not in js:
     fail("versioned theme-preference storage key is missing")
 
+# Primary tools must have their own view and every navigation target must resolve.
+page_names = set(re.findall(r'data-app-page="([^"]+)"', html))
+nav_targets = set(re.findall(r'data-page-target="([^"]+)"', html))
+if not {"home", "watch", "playlist", "room"}.issubset(page_names):
+    fail("one or more dedicated app pages are missing")
+if not nav_targets.issubset(page_names):
+    fail("a navigation button points to a missing app page")
+if 'screen.orientation.lock("landscape")' not in js:
+    fail("landscape orientation support is missing from fullscreen playback")
+if "#playerFrame:fullscreen" not in css or "@keyframes portalPulse" not in css:
+    fail("fullscreen player layout or animated empty-player treatment is missing")
+
 print("SyncTube frontend smoke checks passed.")
 print(f"Checked {len(parser.seen)} unique HTML IDs and {len(referenced_ids)} static app.js ID references.")
