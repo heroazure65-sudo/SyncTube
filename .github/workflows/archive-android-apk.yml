@@ -1,0 +1,72 @@
+name: Archive Android APK builds
+
+on:
+  workflow_run:
+    workflows:
+      - Build SyncTube TWA Persistent Login Test
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Successful Android APK build run ID to archive (for older builds)"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  archive:
+    name: Save APK as a permanent GitHub Release
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download APK build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SyncTube-Native-TWA-Fix
+          run-id: ${{ github.event.workflow_run.id || inputs.source_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          path: apk-backup
+
+      - name: Read source build metadata
+        id: build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id || inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}")"
+          source_sha="$(jq -r '.head_sha' <<<"$run_json")"
+          run_number="$(jq -r '.run_number' <<<"$run_json")"
+          source_branch="$(jq -r '.head_branch' <<<"$run_json")"
+          conclusion="$(jq -r '.conclusion' <<<"$run_json")"
+          test "$conclusion" = "success"
+          test -n "$source_sha"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "run_number=$run_number" >> "$GITHUB_OUTPUT"
+          echo "source_branch=$source_branch" >> "$GITHUB_OUTPUT"
+
+      - name: Publish permanent versioned APK backup
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id || inputs.source_run_id }}
+          SOURCE_SHA: ${{ steps.build.outputs.source_sha }}
+          RUN_NUMBER: ${{ steps.build.outputs.run_number }}
+          SOURCE_BRANCH: ${{ steps.build.outputs.source_branch }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(apk-backup/*)
+          test "${#files[@]}" -gt 0
+          tag="apk-build-${SOURCE_RUN_ID}"
+          title="SyncTube APK build #${RUN_NUMBER}"
+          notes="Permanent APK backup.\n\nSource branch: ${SOURCE_BRANCH}\nSource commit: ${SOURCE_SHA}\nOriginal Actions run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$tag" "${files[@]}" --target "$SOURCE_SHA" --title "$title" --notes "$notes" --repo "$GITHUB_REPOSITORY"
+          fi
