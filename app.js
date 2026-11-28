@@ -1143,12 +1143,12 @@ $("#playerFullscreenBtn").addEventListener("click",async()=>{
  try{
   if(document.fullscreenElement){await document.exitFullscreen();try{screen.orientation?.unlock?.();}catch{}return;}
   if(!frame.requestFullscreen){toast("Fullscreen is not supported by this browser.");return;}
-  await frame.requestFullscreen({navigationUI:"hide"});
+  try{await frame.requestFullscreen({navigationUI:"hide"});}catch{await frame.requestFullscreen();}
   try{if(screen.orientation?.lock)await screen.orientation.lock("landscape");}
   catch{toast("Fullscreen is on. Rotate your device to landscape if it did not rotate automatically.");}
  }catch{toast("Could not open fullscreen. Try your browser's fullscreen option.");}
 });
-document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement){try{screen.orientation?.unlock?.();}catch{}}});
+document.addEventListener("fullscreenchange",()=>{if(document.fullscreenElement){try{screen.orientation?.lock?.("landscape")?.catch?.(()=>{});}catch{}}else{try{screen.orientation?.unlock?.();}catch{}}});
 $("#closeAccountSheetBtn").addEventListener("click", closeAccountSheet);
 $("#accountSheet").addEventListener("click", (event) => { if (event.target === $("#accountSheet")) closeAccountSheet(); });
 $("#accountCopyUidBtn").addEventListener("click", async () => {
