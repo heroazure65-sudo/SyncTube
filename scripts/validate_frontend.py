@@ -105,6 +105,10 @@ if 'screen.orientation.lock("landscape")' not in js:
     fail("landscape orientation support is missing from fullscreen playback")
 if "#playerFrame:fullscreen" not in css or "@keyframes portalPulse" not in css:
     fail("fullscreen player layout or animated empty-player treatment is missing")
+if "@keyframes viewerSweep" not in css or "@keyframes viewerRipple" not in css or "@keyframes viewerShine" not in css:
+    fail("cinematic player motion layers are missing")
+if "@media screen and (orientation:landscape)" not in css or "#playerFrame:-webkit-full-screen" not in css:
+    fail("mobile landscape fullscreen fallback is missing")
 if "@media (prefers-color-scheme: dark)" not in css or ":root:not([data-theme]) .player-empty" not in css:
     fail("system-dark player surfaces are not explicitly protected from light-theme overrides")
 
